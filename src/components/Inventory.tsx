@@ -53,24 +53,25 @@ export default function Inventory() {
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [imageModalUrl, setImageModalUrl] = useState<string | null>(null);
 
   // New product form state
   const [newProduct, setNewProduct] = useState({
     name: "",
-    brand: "",
+    brand: "DUBAI BORKA HOUSE",
     model: "",
     categoryId: "",
-    style: "",
+    style: "Dubai Style",
     fabric: "",
     embellishments: "",
-    occasion: "",
+    occasion: "Party Wear",
     costPrice: 0,
     sellingPrice: 0,
     pictureUrl: "",
     barcode: "",
     productCode: "",
     madeBy: "",
-    minStockLevel: 5,
+    minStockLevel: 0,
     maxStockLevel: 100,
     description: "",
     isActive: true,
@@ -363,20 +364,20 @@ export default function Inventory() {
       // Reset form
       setNewProduct({
         name: "",
-        brand: "",
+        brand: "DUBAI BORKA HOUSE",
         model: "",
         categoryId: "",
-        style: "",
+        style: "Dubai Style",
         fabric: "",
         embellishments: "",
-        occasion: "",
+        occasion: "Party Wear",
         costPrice: 0,
         sellingPrice: 0,
         pictureUrl: "",
         barcode: "",
         productCode: "",
         madeBy: "",
-        minStockLevel: 5,
+        minStockLevel: 0,
         maxStockLevel: 100,
         description: "",
         isActive: true,
@@ -628,8 +629,9 @@ export default function Inventory() {
                 <img
                   src={product.pictureUrl}
                   alt={product.name}
-                  className="w-full h-32 sm:h-40 object-cover"
+                  className="w-full h-32 sm:h-40 object-cover cursor-pointer hover:opacity-80 transition-opacity"
                   loading="lazy"
+                  onClick={() => setImageModalUrl(product.pictureUrl)}
                 />
               )}
               
@@ -693,6 +695,25 @@ export default function Inventory() {
         </div>
       )}
 
+      {/* Image Modal */}
+      {imageModalUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" onClick={() => setImageModalUrl(null)}>
+          <div className="max-w-4xl max-h-[90vh] relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setImageModalUrl(null)}
+              className="absolute top-2 right-2 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
+            >
+              ✕
+            </button>
+            <img
+              src={imageModalUrl}
+              alt="Product"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Add Product Modal */}
       {showAddProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -735,7 +756,7 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Brand *
+                        Brand (Default: DUBAI BORKA HOUSE)
                       </label>
                       <input
                         type="text"
@@ -744,6 +765,7 @@ export default function Inventory() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                         placeholder="e.g., DUBAI BORKA HOUSE"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Leave as default or customize</p>
                     </div>
 
                     <div>
@@ -814,17 +836,16 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Style
+                        Style (Default: Dubai Style)
                       </label>
                       <select
                         value={newProduct.style}
                         onChange={(e) => setNewProduct({...newProduct, style: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                       >
-                        <option value="">Select Style</option>
+                        <option value="Dubai Style">Dubai Style</option>
                         <option value="Traditional">Traditional</option>
                         <option value="Modern">Modern</option>
-                        <option value="Dubai Style">Dubai Style</option>
                         <option value="Saudi Style">Saudi Style</option>
                         <option value="Turkish Style">Turkish Style</option>
                         <option value="Moroccan Style">Moroccan Style</option>
@@ -855,18 +876,17 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Occasion
+                        Occasion (Default: Party Wear)
                       </label>
                       <select
                         value={newProduct.occasion}
                         onChange={(e) => setNewProduct({...newProduct, occasion: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                       >
-                        <option value="">Select Occasion</option>
+                        <option value="Party Wear">Party Wear</option>
                         <option value="Daily Wear">Daily Wear</option>
                         <option value="Casual">Casual</option>
                         <option value="Formal">Formal</option>
-                        <option value="Party Wear">Party Wear</option>
                         <option value="Wedding">Wedding</option>
                         <option value="Eid Special">Eid Special</option>
                       </select>
@@ -894,7 +914,7 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Selling Price (৳) *
+                        Selling Price (৳)
                       </label>
                       <input
                         type="number"
@@ -904,6 +924,7 @@ export default function Inventory() {
                         min="0"
                         step="0.01"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Optional - POS price will be used if not set</p>
                     </div>
 
                     <div>
@@ -1054,7 +1075,7 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Min Stock Level
+                        Min Stock Level (Default: 0)
                       </label>
                       <input
                         type="number"
@@ -1063,6 +1084,7 @@ export default function Inventory() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                         min="0"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Minimum units before low stock alert</p>
                     </div>
 
                     <div>
@@ -1089,6 +1111,21 @@ export default function Inventory() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                         placeholder="https://example.com/image.jpg"
                       />
+                      <p className="text-xs text-gray-500 mt-1">Click product image to view in fullscreen after adding</p>
+                      {newProduct.pictureUrl && (
+                        <div className="mt-2">
+                          <img
+                            src={newProduct.pictureUrl}
+                            alt="Preview"
+                            className="h-32 rounded-lg object-cover border border-gray-200"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '';
+                              target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="sm:col-span-2 lg:col-span-3">
