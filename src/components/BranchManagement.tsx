@@ -431,7 +431,10 @@ export function BranchManagement() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                     >
                       <option value="">Select Manager</option>
-                      {employees?.filter(emp => emp.position === "Manager").map((employee) => (
+                      {employees?.filter(emp => {
+                        const pos = emp.position?.toLowerCase().trim() || "";
+                        return pos === "manager" || pos === "branch manager";
+                      }).map((employee) => (
                         <option key={employee._id} value={employee._id}>
                           {employee.name} ({employee.employeeId})
                         </option>
