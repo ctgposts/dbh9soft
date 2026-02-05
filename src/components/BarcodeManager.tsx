@@ -487,35 +487,37 @@ export default function BarcodeManager() {
             }
             .store-name {
               font-weight: bold;
-              font-size: ${printSettings.fontSize}px;
+              font-size: max(${printSettings.fontSize}px, 0.8vh);
               color: #000;
               text-transform: uppercase;
               letter-spacing: 0.5px;
-              line-height: 1.2;
-              margin-bottom: 2px;
+              line-height: 1.1;
+              margin-bottom: 1px;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
               width: 100%;
               text-align: center;
+              padding: 0 1px;
             }
             .barcode-image {
               max-width: 95%;
               height: auto;
-              max-height: 32px;
-              margin: 1px 0;
+              max-height: 35px;
+              margin: 0.5px 0;
             }
             .product-name {
               font-weight: normal;
-              font-size: ${printSettings.productNameFontSize}px;
-              margin: 2px 0;
+              font-size: max(${printSettings.productNameFontSize}px, 0.7vh);
+              margin: 0.5px 0;
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
               width: 100%;
-              line-height: 1.2;
+              line-height: 1.1;
               text-align: center;
               color: #000;
+              padding: 0 1px;
             }
             .bottom-info {
               display: flex;
@@ -524,21 +526,23 @@ export default function BarcodeManager() {
               width: 100%;
               margin-top: auto;
               gap: 2px;
-              margin: 0px 0;
+              margin: 0.5px 0;
               line-height: 1;
+              padding: 0 1px;
             }
             .product-price {
               color: #000;
-              font-size: ${printSettings.fontSize + 1}px;
+              font-size: max(${printSettings.fontSize + 1}px, 0.75vh);
               font-weight: bold;
-              margin: 2px 0;
+              margin: 0.5px 0;
               text-align: center;
               width: 100%;
-              line-height: 1.2;
+              line-height: 1.1;
+              padding: 0 1px;
             }
             .made-by {
               color: #666;
-              font-size: 10px;
+              font-size: max(8px, 0.6vh);
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
@@ -546,7 +550,7 @@ export default function BarcodeManager() {
               line-height: 1;
             }
             .serial-number {
-              font-size: ${printSettings.serialNumberFontSize}px;
+              font-size: max(${printSettings.serialNumberFontSize}px, 0.65vh);
               color: #333;
               white-space: nowrap;
               overflow: hidden;
@@ -556,7 +560,7 @@ export default function BarcodeManager() {
               line-height: 1;
             }
             .product-size {
-              font-size: ${printSettings.productSizeFontSize}px;
+              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
               color: #333;
               margin: 0px 0;
               white-space: nowrap;
@@ -571,12 +575,13 @@ export default function BarcodeManager() {
               justify-content: space-between;
               align-items: center;
               width: 100%;
-              margin: 0px 0;
+              margin: 0.5px 0;
               gap: 2px;
               line-height: 1;
+              padding: 0 1px;
             }
             .product-color {
-              font-size: ${printSettings.productSizeFontSize}px;
+              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
               color: #333;
               white-space: nowrap;
               overflow: hidden;
@@ -586,19 +591,20 @@ export default function BarcodeManager() {
               flex: 1;
             }
             .variant-circle {
-              width: 28px;
-              height: 28px;
+              width: 22px;
+              height: 22px;
               border-radius: 50%;
               background: transparent;
               display: flex;
               align-items: center;
               justify-content: center;
-              margin: 0px auto;
+              margin: 0.5px auto 0;
               font-weight: bold;
-              font-size: 13px;
+              font-size: max(11px, 0.9vh);
               color: #7c3aed;
-              border: 2px solid #7c3aed;
+              border: 1.5px solid #7c3aed;
               line-height: 1;
+              flex-shrink: 0;
             }
             .print-controls {
               position: fixed;
