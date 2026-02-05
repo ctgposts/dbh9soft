@@ -30,6 +30,7 @@ import type * as onlineStore from "../onlineStore.js";
 import type * as outstanding from "../outstanding.js";
 import type * as phase4Analytics from "../phase4Analytics.js";
 import type * as productImageRecognition from "../productImageRecognition.js";
+import type * as productMigration from "../productMigration.js";
 import type * as products from "../products.js";
 import type * as refunds from "../refunds.js";
 import type * as returns from "../returns.js";
@@ -45,6 +46,7 @@ import type * as stockManagement from "../stockManagement.js";
 import type * as stockTransfer from "../stockTransfer.js";
 import type * as userManagement from "../userManagement.js";
 import type * as userRules from "../userRules.js";
+import type * as variants from "../variants.js";
 import type * as whatsappOrders from "../whatsappOrders.js";
 import type * as wishlist from "../wishlist.js";
 
@@ -77,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   outstanding: typeof outstanding;
   phase4Analytics: typeof phase4Analytics;
   productImageRecognition: typeof productImageRecognition;
+  productMigration: typeof productMigration;
   products: typeof products;
   refunds: typeof refunds;
   returns: typeof returns;
@@ -92,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   stockTransfer: typeof stockTransfer;
   userManagement: typeof userManagement;
   userRules: typeof userRules;
+  variants: typeof variants;
   whatsappOrders: typeof whatsappOrders;
   wishlist: typeof wishlist;
 }>;

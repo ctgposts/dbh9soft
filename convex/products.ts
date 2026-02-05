@@ -622,3 +622,168 @@ export const getStockMovements = query({
     return movements;
   },
 });
+
+/**
+ * Create product with multiple variants (color + size combinations)
+ * This creates a main product and separate variant entries
+ */
+export const createWithVariants = mutation({
+  args: {
+    name: v.string(),
+    brand: v.string(),
+    model: v.optional(v.string()),
+    categoryId: v.optional(v.id("categories")),
+    style: v.optional(v.string()),
+    fabric: v.string(),
+    embellishments: v.optional(v.string()),
+    occasion: v.optional(v.string()),
+    costPrice: v.number(),
+    sellingPrice: v.number(),
+    madeBy: v.optional(v.string()),
+    minStockLevel: v.number(),
+    maxStockLevel: v.number(),
+    description: v.optional(v.string()),
+    variants: v.array(v.object({
+      color: v.string(),
+      sizes: v.array(v.string()),
+      stock: v.number(),
+      barcode: v.optional(v.string()),
+      price: v.optional(v.number()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+    
+    // Basic validation
+    if (!args.name?.trim()) throw new Error("Product name required");
+    if (!args.brand?.trim()) throw new Error("Brand required");
+    if (!args.fabric?.trim()) throw new Error("Fabric required");
+    if (args.variants.length === 0) throw new Error("At least one variant required");
+    if (args.sellingPrice <= 0) throw new Error("Selling price must be > 0");
+    
+    // Generate product code
+    const timestamp = Date.now().toString().slice(-6);
+    const productCode = `PRD${timestamp}`;
+    
+    // Create base product (will use first variant's color as default)
+    const firstVariant = args.variants[0];
+    const totalStock = args.variants.reduce((sum, v) => sum + v.stock, 0);
+    
+    const productId = await ctx.db.insert("products", {
+      name: args.name.trim(),
+      brand: args.brand.trim(),
+      model: args.model?.trim() || productCode,
+      categoryId: args.categoryId,
+      style: args.style?.trim() || "Modern",
+      fabric: args.fabric.trim(),
+      color: firstVariant.color, // Primary color
+      sizes: firstVariant.sizes,
+      embellishments: args.embellishments?.trim() || "",
+      occasion: args.occasion?.trim() || "Daily Wear",
+      costPrice: args.costPrice,
+      sellingPrice: args.sellingPrice,
+      productCode,
+      barcode: firstVariant.barcode || `${productCode}001`,
+      madeBy: args.madeBy?.trim() || "",
+      branchStock: [],
+      currentStock: totalStock,
+      minStockLevel: args.minStockLevel,
+      maxStockLevel: args.maxStockLevel,
+      description: args.description?.trim() || "",
+      isActive: true,
+    });
+    
+    // Create variant entries
+    for (let i = 0; i < args.variants.length; i++) {
+      const variant = args.variants[i];
+      const variantCode = `${productCode}-${variant.color.substring(0, 3).toUpperCase()}`;
+      const variantBarcode = variant.barcode || `${productCode}${String(i + 1).padStart(3, '0')}`;
+      
+      await ctx.db.insert("productVariants", {
+        productId,
+        productName: args.name.trim(),
+        color: variant.color,
+        sizes: variant.sizes,
+        stock: {
+          currentStock: variant.stock,
+          minStockLevel: args.minStockLevel,
+          maxStockLevel: args.maxStockLevel,
+        },
+        variantCode,
+        variantBarcode,
+        price: variant.price,
+        isActive: true,
+      });
+    }
+    
+    // Record stock movement
+    const defaultBranch = await ctx.db.query("branches").first();
+    if (defaultBranch && totalStock > 0) {
+      await ctx.db.insert("stockMovements", {
+        productId,
+        productName: args.name.trim(),
+        branchId: defaultBranch._id,
+        branchName: defaultBranch.name,
+        type: "in",
+        quantity: totalStock,
+        reason: "Initial Stock",
+        userId,
+        userName: user.name || user.email || "Unknown",
+        previousStock: 0,
+        newStock: totalStock,
+      });
+    }
+    
+    return {
+      productId,
+      variantCount: args.variants.length,
+      totalStock,
+    };
+  },
+});
+
+/**
+ * Search products including variant information
+ */
+export const searchWithVariants = query({
+  args: {
+    searchTerm: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await getAuthUserId(ctx);
+    
+    const searchLower = args.searchTerm.toLowerCase();
+    const products = await ctx.db.query("products").collect();
+    
+    const filtered = products.filter(p => 
+      p.isActive && (
+        p.name.toLowerCase().includes(searchLower) ||
+        p.barcode.toLowerCase().includes(searchLower) ||
+        p.brand.toLowerCase().includes(searchLower) ||
+        p.productCode.toLowerCase().includes(searchLower)
+      )
+    );
+    
+    // Get variants for each product
+    const withVariants = await Promise.all(
+      filtered.map(async (product) => {
+        const variants = await ctx.db
+          .query("productVariants")
+          .withIndex("by_product", (q) => q.eq("productId", product._id))
+          .collect();
+        
+        return {
+          product,
+          variants: variants.filter(v => v.isActive),
+        };
+      })
+    );
+    
+    return withVariants;
+  },
+});
+

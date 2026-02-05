@@ -1622,6 +1622,26 @@ const applicationTables = {
     updatedAt: v.number(),
   })
     .index("by_branch", ["branchId"]),
+
+  // Product Variants - For managing different color/size/stock combinations
+  productVariants: defineTable({
+    productId: v.id("products"),
+    productName: v.string(),
+    color: v.string(),
+    sizes: v.array(v.string()), // Multiple sizes for this color variant
+    stock: v.object({
+      currentStock: v.number(),
+      minStockLevel: v.number(),
+      maxStockLevel: v.number(),
+    }),
+    variantCode: v.string(), // Unique variant code (e.g., PROD-001-RED)
+    variantBarcode: v.string(), // Barcode for this specific variant
+    price: v.optional(v.number()), // Can override base product price
+    isActive: v.boolean(),
+  })
+    .index("by_product", ["productId"])
+    .index("by_color", ["color"])
+    .index("by_barcode", ["variantBarcode"]),
 };
 
 
