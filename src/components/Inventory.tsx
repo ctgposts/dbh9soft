@@ -86,6 +86,26 @@ export default function Inventory() {
   const addProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
   const deleteProduct = useMutation(api.products.remove);
+  const addCategory = useMutation(api.categories.create);
+
+  // Create a default category if none exist
+  useEffect(() => {
+    const createDefaultCategory = async () => {
+      if (categories.length === 0) {
+        try {
+          await addCategory({
+            name: "General",
+            description: "Default category for products",
+            color: "#9333EA"
+          });
+        } catch (error: any) {
+          console.log("Default category may already exist or error:", error);
+        }
+      }
+    };
+    
+    createDefaultCategory();
+  }, [categories.length, addCategory]);
 
   // Auto-generate model number and product code when form opens
   useEffect(() => {
@@ -225,7 +245,8 @@ export default function Inventory() {
         toast.error("Fabric selection is required");
         return;
       }
-      if (!newProduct.categoryId) {
+      // Category is now optional - if no categories exist, skip it
+      if (categories.length > 0 && !newProduct.categoryId) {
         toast.error("Category selection is required");
         return;
       }
@@ -240,18 +261,23 @@ export default function Inventory() {
         return;
       }
 
-      // Barcode validation
-      if (!newProduct.barcode?.trim()) {
-        toast.error("Barcode is required for product creation");
+      // Auto-generate barcode if not provided
+      let baseBarcode = newProduct.barcode?.trim();
+      if (!baseBarcode) {
+        // Auto-generate: Use brand initials + random numbers
+        const brandInitials = newProduct.brand.substring(0, 3).toUpperCase();
+        const timestamp = Date.now().toString().slice(-4);
+        baseBarcode = `${brandInitials}${timestamp}`;
+      } else if (baseBarcode.length < 6) {
+        toast.error("Barcode must be at least 6 characters long");
         return;
-      }
-      if (newProduct.barcode.length < 6) {
-        toast.error("Barcode must be at least 6 characters long for scanability");
-        return;
-      }
-      if (!/^[A-Z0-9-]+$/.test(newProduct.barcode)) {
-        toast.error("Barcode can only contain uppercase letters, numbers, and hyphens");
-        return;
+      } else if (!/^[A-Z0-9-]+$/.test(baseBarcode)) {
+        // Auto-fix: Convert to uppercase and remove invalid characters
+        baseBarcode = baseBarcode.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        if (baseBarcode.length < 6) {
+          toast.error("Barcode must be at least 6 characters long");
+          return;
+        }
       }
 
       // Validate variants
@@ -299,11 +325,11 @@ export default function Inventory() {
         // Format: BASEBARCODE-COLORCODE-SIZECODE-VARIANTINDEX
         // Example: ABC1234-BL-52-01
         const variantIndex = String(index + 1).padStart(2, '0');
-        const variantBarcode = `${newProduct.barcode}-${colorCode}-${sizeCode}-${variantIndex}`;
+        const variantBarcode = `${baseBarcode}-${colorCode}-${sizeCode}-${variantIndex}`;
         
         // Ensure barcode is not too long (max 20 chars for most barcode scanners)
         const truncatedBarcode = variantBarcode.length > 20 
-          ? `${newProduct.barcode.substring(0, 6)}-${colorCode}-${sizeCode}-${variantIndex}`
+          ? `${baseBarcode.substring(0, 6)}-${colorCode}-${sizeCode}-${variantIndex}`
           : variantBarcode;
 
         return addProduct({
@@ -358,8 +384,13 @@ export default function Inventory() {
       setProductVariants([{ id: `variant-${Date.now()}`, color: "", size: "", stock: 0 }]);
       setShowAddProduct(false);
     } catch (error: any) {
-      console.error("Error adding product:", error);
-      const errorMessage = error?.message || "Failed to add product variants";
+      console.error("Detailed Error adding product:", {
+        error,
+        message: error?.message,
+        errorData: error?.data,
+        status: error?.status,
+      });
+      const errorMessage = error?.message || error?.data?.message || "Failed to add product variants";
       toast.error(errorMessage);
     }
   }, [newProduct, productVariants, addProduct]);
@@ -891,15 +922,16 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Barcode Prefix
+                        Barcode Prefix (Optional)
                       </label>
                       <input
                         type="text"
                         value={newProduct.barcode}
                         onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                        placeholder="Leave empty for auto-generation"
+                        placeholder="Leave empty for auto-generation (will use brand initials + timestamp)"
                       />
+                      <p className="text-xs text-gray-500 mt-1">If provided, must be 6+ characters. Auto-generated if empty.</p>
                     </div>
                   </div>
                 </div>
