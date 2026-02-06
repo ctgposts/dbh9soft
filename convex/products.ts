@@ -766,8 +766,7 @@ export const createWithVariants = mutation({
       });
     }
     
-    // Record stock movement
-    const defaultBranch = await ctx.db.query("branches").first();
+    // Record stock movement (using defaultBranch from line 712)
     if (defaultBranch && totalStock > 0) {
       await ctx.db.insert("stockMovements", {
         productId,
