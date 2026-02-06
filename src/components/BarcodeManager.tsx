@@ -674,15 +674,15 @@ export default function BarcodeManager() {
         const serialNumber = getProductSerialNumber(product._id);
         const variantId = getVariantId(product);
         
-        // Use custom size display if set, otherwise use product sizes
-        const sizeDisplay = printSettings.customSizeDisplay 
-          ? printSettings.customSizeDisplay 
-          : (product.sizes && product.sizes.length > 0 ? product.sizes.slice(0, 3).join(',') : '');
+        // Extract base product name (remove color and size info after " - ")
+        const baseProductName = product.name.includes(' - ') 
+          ? product.name.split(' - ')[0] 
+          : product.name;
         
         htmlContent += `
           <div class="sticker">
             <div class="store-name">DUBAI BORKA HOUSE</div>
-            ${printSettings.includeName ? `<div class="product-name">${product.name}</div>` : ''}
+            ${printSettings.includeName ? `<div class="product-name">${baseProductName}</div>` : ''}
             ${printSettings.includePrice ? `<div class="product-price">৳${product.sellingPrice.toLocaleString('en-BD')}</div>` : ''}
             <img src="${barcodeImage}" alt="Barcode" class="barcode-image" />
             <div class="variant-circle">${variantId}</div>
