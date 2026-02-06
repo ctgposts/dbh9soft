@@ -37,7 +37,7 @@ async function generateStyleNumber(
   
   // Get all products with this hash
   const allProducts = await ctx.db.query("products").collect();
-  const sameGroupProducts = allProducts.filter(p => {
+  const sameGroupProducts = allProducts.filter((p: any) => {
     const productHash = getStyleGroupHash(p.categoryId, p.fabric, p.embellishments, p.sellingPrice);
     return productHash === hash;
   });
@@ -795,6 +795,15 @@ export const createWithVariants = mutation({
       maxStockLevel: args.maxStockLevel,
     }));
     
+    // Generate style number
+    const styleNumber = await generateStyleNumber(
+      ctx,
+      args.categoryId,
+      args.fabric.trim(),
+      args.embellishments?.trim(),
+      args.sellingPrice
+    );
+    
     const productId = await ctx.db.insert("products", {
       name: args.name.trim(),
       brand: args.brand.trim(),
@@ -808,6 +817,7 @@ export const createWithVariants = mutation({
       occasion: args.occasion?.trim() || "Daily Wear",
       costPrice: args.costPrice,
       sellingPrice: args.sellingPrice,
+      styleNumber,
       productCode,
       barcode: firstVariant.barcode || `${productCode}001`,
       madeBy: args.madeBy?.trim() || "",
@@ -997,4 +1007,51 @@ export const autoAssignBoxNumbers = mutation({
     };
   },
 });
+
+/**
+ * Migration: Backfill styleNumber for all existing products that don't have one
+ */
+export const migrateStyleNumbers = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const allProducts = await ctx.db.query("products").collect();
+    let migratedCount = 0;
+    let skippedCount = 0;
+
+    for (const product of allProducts) {
+      // If product already has styleNumber, skip it
+      if (product.styleNumber) {
+        skippedCount++;
+        continue;
+      }
+
+      // Generate styleNumber for this product
+      const styleNumber = await generateStyleNumber(
+        ctx,
+        product.categoryId,
+        product.fabric,
+        product.embellishments,
+        product.sellingPrice
+      );
+
+      // Update the product with the generated styleNumber
+      await ctx.db.patch(product._id, {
+        styleNumber,
+      });
+
+      migratedCount++;
+    }
+
+    return {
+      message: `Successfully migrated styleNumber for existing products`,
+      totalProducts: allProducts.length,
+      migratedCount,
+      skippedCount,
+    };
+  },
+});
+
 

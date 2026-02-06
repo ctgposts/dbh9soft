@@ -198,7 +198,7 @@ const applicationTables = {
     sellingPrice: v.number(),
     
     // Style Number (Auto-generated from Category + Fabric + Embellishments + Price)
-    styleNumber: v.string(), // e.g., "A1", "A2", "B1" etc.
+    styleNumber: v.optional(v.string()), // e.g., "A1", "A2", "B1" etc.
     
     // Product image and barcode
     pictureUrl: v.optional(v.string()),
