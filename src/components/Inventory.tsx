@@ -44,15 +44,18 @@ const generateNextModelNumber = (existingProducts: any[]) => {
 
 // Function to auto-generate product name from Category + Fabric + Embellishments
 const generateProductName = (categoryId: string, fabric: string, embellishments: string, categories: any[]): string => {
-  if (!categoryId || !fabric || !embellishments) {
+  if (!fabric || !embellishments) {
     return "";
   }
   
-  // Get category name from categoryId
-  const category = categories.find(c => c._id === categoryId);
-  const categoryName = category ? category.name : "";
+  // Get category name from categoryId (optional)
+  let categoryName = "";
+  if (categoryId) {
+    const category = categories.find(c => c._id === categoryId);
+    categoryName = category ? category.name : "";
+  }
   
-  // Combine: Category Name + Fabric + Embellishments
+  // Combine: Category Name (if exists) + Fabric + Embellishments
   const parts = [categoryName, fabric, embellishments].filter(part => part.trim());
   return parts.join(" ");
 };
@@ -267,13 +270,18 @@ export default function Inventory() {
       }
 
       // Price validation
-      if (newProduct.costPrice < 0) {
-        toast.error("Cost price cannot be negative");
+      if (newProduct.costPrice <= 0) {
+        toast.error("Cost price must be greater than 0");
         return;
       }
-      if (newProduct.sellingPrice <= 0) {
-        toast.error("Selling price must be greater than 0");
+      if (newProduct.sellingPrice < 0) {
+        toast.error("Selling price cannot be negative");
         return;
+      }
+      // If selling price is 0, it's optional (POS system will use default)
+      if (newProduct.sellingPrice === 0) {
+        // Warning but allow - system will use POS price
+        console.log("Selling price is 0 - system will use POS default price");
       }
 
       // Auto-generate barcode if not provided
