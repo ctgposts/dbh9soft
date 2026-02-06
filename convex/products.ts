@@ -3,53 +3,88 @@ import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
- * Helper function to generate a unique identifier from product attributes
- * This identifier groups products with same: Category, Fabric, Embellishments, Price
+ * Create a unique key from product attributes for style grouping
+ * Products with same Category, Fabric, Embellishments, and Selling Price have same key
  */
-function getStyleGroupHash(
+function getStyleGroupKey(
   categoryId: string | undefined,
   fabric: string,
   embellishments: string | undefined,
   price: number
 ): string {
-  // Normalize values for consistent hashing
-  const cat = categoryId || "NC"; // NC = No Category
-  const fab = fabric.slice(0, 3).toUpperCase(); // First 3 chars of fabric
-  const emb = embellishments ? embellishments.slice(0, 3).toUpperCase() : "PL"; // PL = Plain
-  const pr = Math.round(price / 100); // Round price to nearest 100
+  const cat = categoryId || "NO_CAT";
+  const fab = fabric.trim().toUpperCase();
+  const emb = embellishments ? embellishments.trim().toUpperCase() : "PLAIN";
+  const pr = price.toString();
   
-  return `${fab}${emb}${pr}`;
+  return `${cat}|${fab}|${emb}|${pr}`;
 }
 
 /**
- * Generate a sequential style number for a given style group
- * Example: A1, A2, A3 for group "A", B1, B2 for group "B", etc.
+ * Find existing style or create a new one for this product
  */
-async function generateStyleNumber(
+async function findOrCreateStyle(
   ctx: any,
   categoryId: string | undefined,
+  categoryName: string | undefined,
   fabric: string,
   embellishments: string | undefined,
-  price: number
-): Promise<string> {
-  // Get the hash for this style group
-  const hash = getStyleGroupHash(categoryId, fabric, embellishments, price);
+  sellingPrice: number
+): Promise<{ styleId: any; styleNumber: string }> {
+  const key = getStyleGroupKey(categoryId, fabric, embellishments, sellingPrice);
   
-  // Get all products with this hash
-  const allProducts = await ctx.db.query("products").collect();
-  const sameGroupProducts = allProducts.filter((p: any) => {
-    const productHash = getStyleGroupHash(p.categoryId, p.fabric, p.embellishments, p.sellingPrice);
-    return productHash === hash;
+  // Search for existing style with same attributes
+  const allStyles = await ctx.db.query("styles").collect();
+  const existingStyle = allStyles.find((style: any) => {
+    const styleKey = getStyleGroupKey(style.categoryId, style.fabric, style.embellishments, style.sellingPrice);
+    return styleKey === key;
   });
   
-  // Count how many we already have in this group
-  const nextNumber = sameGroupProducts.length + 1;
+  if (existingStyle) {
+    return {
+      styleId: existingStyle._id,
+      styleNumber: existingStyle.styleNumber,
+    };
+  }
   
-  // Map hash to letter: CHI=A, SAT=B, GEO=C, etc.
-  // For now, use simple alphabet mapping based on first char
-  const fabricLetter = fabric.charAt(0).toUpperCase();
+  // Create new style
+  // Get the next style number
+  const styleNumber = await getNextStyleNumber(ctx);
   
-  return `${fabricLetter}${nextNumber}`;
+  const styleId = await ctx.db.insert("styles", {
+    styleNumber,
+    categoryId: categoryId || undefined,
+    categoryName: categoryName || undefined,
+    fabric: fabric.trim(),
+    embellishments: embellishments ? embellishments.trim() : undefined,
+    sellingPrice,
+    productIds: [],
+    productCount: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  
+  return { styleId, styleNumber };
+}
+
+/**
+ * Get the next available style number (DBH-0001, DBH-0002, etc.)
+ */
+async function getNextStyleNumber(ctx: any): Promise<string> {
+  const allStyles = await ctx.db.query("styles").collect();
+  
+  // Extract numbers from existing style numbers
+  const numbers = allStyles
+    .map((s: any) => {
+      const match = s.styleNumber.match(/DBH-(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter((n: number) => n > 0);
+  
+  // Get the maximum number and add 1
+  const nextNumber = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
+  
+  return `DBH-${String(nextNumber).padStart(4, '0')}`;
 }
 
 export const list = query({
@@ -311,10 +346,15 @@ export const create = mutation({
     const productCode = args.productCode || `AB${timestamp}`;
     const barcode = args.barcode || `${productCode}${args.sellingPrice.toString().padStart(4, '0')}`;
     
-    // Generate style number based on category, fabric, embellishments, and price
-    const styleNumber = await generateStyleNumber(
+    // Find or create style for this product
+    const categoryName = args.categoryId
+      ? (await ctx.db.get(args.categoryId))?.name
+      : undefined;
+    
+    const { styleId, styleNumber } = await findOrCreateStyle(
       ctx,
       args.categoryId,
+      categoryName,
       args.fabric,
       args.embellishments,
       args.sellingPrice
@@ -347,6 +387,7 @@ export const create = mutation({
       costPrice: args.costPrice,
       sellingPrice: args.sellingPrice,
       styleNumber,
+      styleId,
       productCode,
       barcode,
       madeBy: args.madeBy?.trim() || "",
@@ -359,6 +400,17 @@ export const create = mutation({
       description: args.description?.trim() || "",
       isActive: args.isActive ?? true,
     });
+    
+    // Add this product to the style's productIds list
+    const style = await ctx.db.get(styleId as any);
+    if (style) {
+      const updatedProductIds = [...(style as any).productIds, productId];
+      await ctx.db.patch(styleId as any, {
+        productIds: updatedProductIds,
+        productCount: updatedProductIds.length,
+        updatedAt: Date.now(),
+      });
+    }
     
     // Record initial stock movement
     if (args.currentStock > 0 && defaultBranch) {
@@ -500,24 +552,60 @@ export const update = mutation({
       }));
     }
     
-    // Recalculate style number if any style-affecting fields changed
+    // Recalculate style if any style-affecting fields changed
+    let updatedStyleId = existingProduct.styleId;
     let updatedStyleNumber = existingProduct.styleNumber;
+    
     if (
       updateData.categoryId !== existingProduct.categoryId ||
       updateData.fabric !== existingProduct.fabric ||
       updateData.embellishments !== existingProduct.embellishments ||
       updateData.sellingPrice !== existingProduct.sellingPrice
     ) {
-      updatedStyleNumber = await generateStyleNumber(
+      // Get category name
+      const categoryName = updateData.categoryId
+        ? (await ctx.db.get(updateData.categoryId))?.name
+        : undefined;
+      
+      // Find or create new style
+      const { styleId: newStyleId, styleNumber: newStyleNumber } = await findOrCreateStyle(
         ctx,
         updateData.categoryId,
+        categoryName,
         updateData.fabric,
         updateData.embellishments,
         updateData.sellingPrice
-      );
+      ) as any;
+      
+      // Update old style - remove product from it
+      if (existingProduct.styleId) {
+        const oldStyle = await ctx.db.get(existingProduct.styleId as any);
+        if (oldStyle) {
+          const updatedProductIds = (oldStyle as any).productIds.filter((id: string) => id !== args.id);
+          await ctx.db.patch(existingProduct.styleId as any, {
+            productIds: updatedProductIds,
+            productCount: updatedProductIds.length,
+            updatedAt: Date.now(),
+          });
+        }
+      }
+      
+      // Add product to new style
+      const newStyle = await ctx.db.get(newStyleId as any);
+      if (newStyle) {
+        const updatedProductIds = [...(newStyle as any).productIds, args.id];
+        await ctx.db.patch(newStyleId as any, {
+          productIds: updatedProductIds,
+          productCount: updatedProductIds.length,
+          updatedAt: Date.now(),
+        });
+      }
+      
+      updatedStyleId = newStyleId as any;
+      updatedStyleNumber = newStyleNumber;
     }
     
-    await ctx.db.patch(id, {
+    await ctx.db.patch(args.id, {
       name: updateData.name.trim(),
       brand: updateData.brand.trim(),
       model: updateData.model?.trim(),
@@ -531,6 +619,7 @@ export const update = mutation({
       costPrice: updateData.costPrice,
       sellingPrice: updateData.sellingPrice,
       styleNumber: updatedStyleNumber,
+      styleId: updatedStyleId,
       barcode: updateData.barcode?.trim(),
       productCode: updateData.productCode?.trim(),
       madeBy: updateData.madeBy?.trim(),
@@ -543,7 +632,7 @@ export const update = mutation({
       branchStock: updatedBranchStock,
     });
     
-    return id;
+    return args.id;
   },
 });
 
@@ -795,14 +884,19 @@ export const createWithVariants = mutation({
       maxStockLevel: args.maxStockLevel,
     }));
     
-    // Generate style number
-    const styleNumber = await generateStyleNumber(
+    // Find or create style for this product
+    const categoryName = args.categoryId
+      ? (await ctx.db.get(args.categoryId))?.name
+      : undefined;
+    
+    const { styleId, styleNumber } = await findOrCreateStyle(
       ctx,
       args.categoryId,
+      categoryName,
       args.fabric.trim(),
       args.embellishments?.trim(),
       args.sellingPrice
-    );
+    ) as any;
     
     const productId = await ctx.db.insert("products", {
       name: args.name.trim(),
@@ -1028,14 +1122,19 @@ export const migrateStyleNumbers = mutation({
         continue;
       }
 
-      // Generate styleNumber for this product
-      const styleNumber = await generateStyleNumber(
+      // Find or create style for this product
+      const catName = product.categoryId
+        ? (await ctx.db.get(product.categoryId))?.name
+        : undefined;
+      
+      const { styleId, styleNumber } = await findOrCreateStyle(
         ctx,
         product.categoryId,
+        catName,
         product.fabric,
         product.embellishments,
         product.sellingPrice
-      );
+      ) as any;
 
       // Update the product with the generated styleNumber
       await ctx.db.patch(product._id, {

@@ -690,6 +690,9 @@ export default function Inventory() {
                   <p><span className="font-medium">Brand:</span> {product.brand}</p>
                   {product.model && <p><span className="font-medium">Model:</span> {product.model}</p>}
                   <p><span className="font-medium">Category:</span> {category?.name || 'N/A'}</p>
+                  {product.styleNumber && (
+                    <p><span className="font-medium">Style #:</span> <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-bold">{product.styleNumber}</span></p>
+                  )}
                   <p><span className="font-medium">Fabric:</span> {product.fabric}</p>
                   <p><span className="font-medium">Color:</span> {product.color}</p>
                   {product.stockLocation && <p><span className="font-medium">📍 Box:</span> <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">{product.stockLocation}</span></p>}
@@ -886,6 +889,20 @@ export default function Inventory() {
                         placeholder="Auto-generated"
                       />
                       <p className="text-xs text-gray-500 mt-1">Auto-generated sequential model number</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Style Number
+                      </label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={editingProduct?.styleNumber || "Auto-assigned"}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        placeholder="DBH-XXXX"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Auto-assigned based on Category, Fabric, Embellishments & Price</p>
                     </div>
 
                     <div>
@@ -1364,6 +1381,18 @@ export default function Inventory() {
                       onChange={(e) => setEditingProduct({...editingProduct, barcode: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">স্টাইল নম্বর</label>
+                    <input
+                      type="text"
+                      value={editingProduct.styleNumber || ""}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-purple-100 text-purple-800 font-bold cursor-not-allowed"
+                      placeholder="DBH-XXXX"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">স্বয়ংক্রিয়-বরাদ্দ: ক্যাটাগরি, ফেব্রিক, সজ্জা এবং মূল্যের উপর ভিত্তি করে</p>
                   </div>
 
                   <div>

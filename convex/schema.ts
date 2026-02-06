@@ -178,6 +178,25 @@ const applicationTables = {
     isActive: v.boolean(),
   }),
 
+  // Style Numbers (DBH-0001, DBH-0002, etc.)
+  // Groups products with same Category, Fabric, Embellishments, and Selling Price
+  styles: defineTable({
+    styleNumber: v.string(), // "DBH-0001", "DBH-0002", etc.
+    categoryId: v.optional(v.id("categories")),
+    categoryName: v.optional(v.string()),
+    fabric: v.string(),
+    embellishments: v.optional(v.string()),
+    sellingPrice: v.number(),
+    productIds: v.array(v.id("products")), // All products in this style
+    productCount: v.number(), // Cached count for quick access
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_style_number", ["styleNumber"])
+    .index("by_category", ["categoryId"])
+    .index("by_fabric", ["fabric"])
+    .index("by_price", ["sellingPrice"]),
+
   // Abaya Products
   products: defineTable({
     name: v.string(),
@@ -198,7 +217,8 @@ const applicationTables = {
     sellingPrice: v.number(),
     
     // Style Number (Auto-generated from Category + Fabric + Embellishments + Price)
-    styleNumber: v.optional(v.string()), // e.g., "A1", "A2", "B1" etc.
+    styleNumber: v.optional(v.string()), // e.g., "DBH-0001", "DBH-0002", etc.
+    styleId: v.optional(v.id("styles")), // Reference to the style group
     
     // Product image and barcode
     pictureUrl: v.optional(v.string()),
@@ -232,6 +252,8 @@ const applicationTables = {
     .index("by_category", ["categoryId"])
     .index("by_brand", ["brand"])
     .index("by_style", ["style"])
+    .index("by_style_id", ["styleId"])
+    .index("by_style_number", ["styleNumber"])
     .index("by_fabric", ["fabric"])
     .index("by_color", ["color"])
     .index("by_occasion", ["occasion"])

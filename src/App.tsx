@@ -11,6 +11,7 @@ import { useSystemInitialization } from "./hooks/useSystemInitialization";
 
 // Lazy load heavy components
 const Inventory = lazy(() => import("./components/Inventory"));
+const Styles = lazy(() => import("./components/Styles"));
 const POS = lazy(() => import("./components/POS"));
 const EnhancedPOS = lazy(() => import("./components/EnhancedPOS"));
 const Sales = lazy(() => import("./components/Sales"));
@@ -91,6 +92,7 @@ export default function App() {
     { id: "product-recognition", name: "Product Scanner", icon: "📸" },
     { id: "pos", name: "POS", icon: "🏷️" },
     { id: "inventory", name: "Inventory", icon: "📦" },
+    { id: "styles", name: "Style Groups", icon: "🎨" },
     { id: "categories", name: "Categories", icon: "📂" },
     { id: "stock-management", name: "Stock Mgmt", icon: "🏭" },
     { id: "stock-transfer", name: "Stock Transfer", icon: "🔄" },
@@ -124,6 +126,7 @@ export default function App() {
     { id: "product-recognition", name: "Product Scanner", icon: "📸" },
     { id: "pos", name: "POS", icon: "🏷️" },
     { id: "inventory", name: "Inventory", icon: "📦" },
+    { id: "styles", name: "Style Groups", icon: "🎨" },
     { id: "categories", name: "Categories", icon: "📂" },
     { id: "stock-management", name: "Stock Mgmt", icon: "🏭" },
     { id: "stock-transfer", name: "Stock Transfer", icon: "🔄" },
@@ -151,6 +154,8 @@ export default function App() {
         return <Suspense fallback={<LazyLoadingFallback />}><ProductImageRecognition /></Suspense>;
       case "inventory":
         return <Suspense fallback={<LazyLoadingFallback />}><Inventory /></Suspense>;
+      case "styles":
+        return <Suspense fallback={<LazyLoadingFallback />}><Styles /></Suspense>;
       case "categories":
         return <Suspense fallback={<LazyLoadingFallback />}><Categories /></Suspense>;
       case "stock-management":
