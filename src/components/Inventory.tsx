@@ -42,6 +42,21 @@ const generateNextModelNumber = (existingProducts: any[]) => {
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
 };
 
+// Function to auto-generate product name from Category + Fabric + Embellishments
+const generateProductName = (categoryId: string, fabric: string, embellishments: string, categories: any[]): string => {
+  if (!categoryId || !fabric || !embellishments) {
+    return "";
+  }
+  
+  // Get category name from categoryId
+  const category = categories.find(c => c._id === categoryId);
+  const categoryName = category ? category.name : "";
+  
+  // Combine: Category Name + Fabric + Embellishments
+  const parts = [categoryName, fabric, embellishments].filter(part => part.trim());
+  return parts.join(" ");
+};
+
 export default function Inventory() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -107,6 +122,18 @@ export default function Inventory() {
       }));
     }
   }, [showAddProduct, products]);
+
+  // Auto-generate product name from Category + Fabric + Embellishments
+  useEffect(() => {
+    const generatedName = generateProductName(newProduct.categoryId, newProduct.fabric, newProduct.embellishments, categories);
+    // Auto-fill the name only if it's empty
+    if (generatedName && !newProduct.name.trim()) {
+      setNewProduct(prev => ({
+        ...prev,
+        name: generatedName
+      }));
+    }
+  }, [newProduct.categoryId, newProduct.fabric, newProduct.embellishments, categories]);
 
   // Memoized unique values for filters - optimized for performance
   const uniqueValues = useMemo(() => {
@@ -877,6 +904,26 @@ export default function Inventory() {
                         <option value="HAND WORK">HAND WORK</option>
                         <option value="ARI WORK">ARI WORK</option>
                         <option value="CREP Work">CREP Work</option>
+                        <option value="BeadSton">BeadSton</option>
+                        <option value="LaceSton">LaceSton</option>
+                        <option value="EmbroStone">EmbroStone</option>
+                        <option value="AriStone">AriStone</option>
+                        <option value="HandSton">HandSton</option>
+                        <option value="CrepStone">CrepStone</option>
+                        <option value="SeqenStone">SeqenStone</option>
+                        <option value="StoneFbody">StoneFbody</option>
+                        <option value="StoneHbody">StoneHbody</option>
+                        <option value="Stonehand">Stonehand</option>
+                        <option value="StoneBack">StoneBack</option>
+                        <option value="AriHbody">AriHbody</option>
+                        <option value="AriFBoday">AriFBoday</option>
+                        <option value="Arihand">Arihand</option>
+                        <option value="AriFront">AriFront</option>
+                        <option value="AriBack">AriBack</option>
+                        <option value="EmbroFBody">EmbroFBody</option>
+                        <option value="EmbroHbody">EmbroHbody</option>
+                        <option value="EmbroHand">EmbroHand</option>
+                        <option value="EmbroFront">EmbroFront</option>
                       </select>
                     </div>
 
