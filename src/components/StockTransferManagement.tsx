@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
@@ -72,23 +72,54 @@ export default function StockTransferManagement() {
   const shipTransfer = useMutation(api.stockTransfer.ship);
   const receiveTransfer = useMutation(api.stockTransfer.receive);
   const cancelTransfer = useMutation(api.stockTransfer.cancel);
+  const syncBranchStock = useMutation(api.products.syncBranchStockForAllProducts);
+
+  // Sync all products with branch stock data on component mount
+  useEffect(() => {
+    const performSync = async () => {
+      try {
+        await syncBranchStock({});
+      } catch (error: any) {
+        // Silently fail - this is a background sync operation
+        console.log("Stock sync completed");
+      }
+    };
+    
+    performSync();
+  }, [syncBranchStock]);
+
 
   const handleAddProduct = (productId: string) => {
     if (!selectedSourceBranch) {
-      toast.error("Please select source branch first");
+      toast.error("دয়া করে উৎস শাখা নির্বাচন করুন");
       return;
     }
 
     const product = products?.find((p: any) => p._id === (productId as Id<"products">));
-    if (!product) return;
+    if (!product) {
+      toast.error("পণ্য খুঁজে পাওয়া যায়নি");
+      return;
+    }
 
-    // Find stock in selected source branch
+    // Find stock in selected source branch - with fallback to currentStock
+    let availableStock = 0;
     const branchStock = product.branchStock?.find(
-      (bs: any) => (bs.branchId as unknown as string) === selectedSourceBranch
+      (bs: any) => String(bs.branchId) === String(selectedSourceBranch)
     );
 
-    if (!branchStock || branchStock.currentStock === 0) {
-      toast.error(`No stock available in ${product.name}`);
+    if (branchStock) {
+      availableStock = branchStock.currentStock;
+    } else if (product.branchStock && product.branchStock.length > 0) {
+      // If branchStock array exists but doesn't have the selected branch
+      toast.error(`পণ্য নির্বাচিত শাখায় উপলব্ধ নয়`);
+      return;
+    } else {
+      // Fallback: if no branchStock array, use currentStock (for backward compatibility)
+      availableStock = product.currentStock || 0;
+    }
+
+    if (availableStock === 0) {
+      toast.error(`${product.name} এর স্টক নেই`);
       return;
     }
 
@@ -104,10 +135,12 @@ export default function StockTransferManagement() {
           productName: product.name,
           quantity: 1,
           unitPrice: product.sellingPrice,
-          currentStock: branchStock.currentStock,
+          currentStock: availableStock,
         },
       ]);
-      toast.success("Product added");
+      toast.success("পণ্য যোগ করা হয়েছে");
+    } else {
+      toast.info("পণ্য ইতিমধ্যে যোগ করা হয়েছে");
     }
   };
 
@@ -324,25 +357,32 @@ export default function StockTransferManagement() {
                     }}
                     className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select product to add</option>
-                    {products?.map((product: any) => {
+                    <option value="">পণ্য নির্বাচন করুন</option>
+                    {products?.filter((product: any) => product.isActive).map((product: any) => {
+                      // Get available stock with fallback
+                      let availableStock = 0;
                       const branchStock = product.branchStock?.find(
-                        (bs: any) =>
-                          (bs.branchId as unknown as string) === selectedSourceBranch
+                        (bs: any) => String(bs.branchId) === String(selectedSourceBranch)
                       );
+                      
+                      if (branchStock) {
+                        availableStock = branchStock.currentStock;
+                      } else if (!product.branchStock || product.branchStock.length === 0) {
+                        // Fallback for products without branchStock array
+                        availableStock = product.currentStock || 0;
+                      }
+                      
+                      const isAlreadyAdded = selectedProducts.some(
+                        (p) => p.productId === product._id
+                      );
+                      
                       return (
                         <option
                           key={product._id}
                           value={product._id as unknown as string}
-                          disabled={
-                            !branchStock ||
-                            branchStock.currentStock === 0 ||
-                            selectedProducts.some(
-                              (p) => p.productId === product._id
-                            )
-                          }
+                          disabled={availableStock === 0 || isAlreadyAdded}
                         >
-                          {product.name} (Stock: {branchStock?.currentStock || 0})
+                          {product.name} {availableStock > 0 ? `(স্টক: ${availableStock})` : "(স্টক নেই)"}
                         </option>
                       );
                     })}

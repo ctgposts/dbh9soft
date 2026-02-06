@@ -714,6 +714,7 @@ export default function BarcodeManager() {
               </div>
             ` : ''}
             <div class="variant-circle">${variantId}</div>
+            ${product.stockLocation ? `<div class="stock-location" style="font-size: max(9px, 0.7vh); color: #7c3aed; font-weight: bold; margin: 0.5px 0; text-align: center; width: 100%;">📍 ${product.stockLocation}</div>` : ''}
             <div class="bottom-info">
               ${printSettings.includeSerialNumber ? `<div class="serial-number">${serialNumber}</div>` : '<div></div>'}
               ${printSettings.includeMadeBy && product.madeBy ? `<div class="made-by">${product.madeBy}</div>` : '<div></div>'}

@@ -71,6 +71,7 @@ export default function Inventory() {
     barcode: "",
     productCode: "",
     madeBy: "",
+    stockLocation: "",
     minStockLevel: 0,
     maxStockLevel: 100,
     description: "",
@@ -88,25 +89,10 @@ export default function Inventory() {
   const updateProduct = useMutation(api.products.update);
   const deleteProduct = useMutation(api.products.remove);
   const addCategory = useMutation(api.categories.create);
+  const autoAssignBoxNumbers = useMutation(api.products.autoAssignBoxNumbers);
 
-  // Create a default category if none exist
-  useEffect(() => {
-    const createDefaultCategory = async () => {
-      if (categories.length === 0) {
-        try {
-          await addCategory({
-            name: "General",
-            description: "Default category for products",
-            color: "#9333EA"
-          });
-        } catch (error: any) {
-          console.log("Default category may already exist or error:", error);
-        }
-      }
-    };
-    
-    createDefaultCategory();
-  }, [categories.length, addCategory]);
+  // NOTE: Removed auto-creation of "General" category
+  // Categories must be manually created by the user
 
   // Auto-generate model number and product code when form opens
   useEffect(() => {
@@ -349,6 +335,7 @@ export default function Inventory() {
           barcode: truncatedBarcode,
           productCode: variantCode,
           madeBy: newProduct.madeBy,
+          pictureUrl: newProduct.pictureUrl,
           currentStock: variant.stock,
           minStockLevel: newProduct.minStockLevel,
           maxStockLevel: newProduct.maxStockLevel,
@@ -436,6 +423,8 @@ export default function Inventory() {
         barcode: productData.barcode,
         productCode: productData.productCode,
         madeBy: productData.madeBy,
+        stockLocation: productData.stockLocation,
+        pictureUrl: productData.pictureUrl,
         minStockLevel: productData.minStockLevel,
         maxStockLevel: productData.maxStockLevel,
         description: productData.description,
@@ -505,6 +494,22 @@ export default function Inventory() {
             >
               <span className="text-xl">➕</span>
               Add New Product
+            </button>
+            
+            <button
+              onClick={async () => {
+                try {
+                  const result = await autoAssignBoxNumbers();
+                  toast.success(`✅ ${result.productsAssigned} products assigned to ${result.groupsCreated} groups!\n\n${result.details}`);
+                } catch (error: any) {
+                  toast.error(error.message || "Failed to assign box numbers");
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-all duration-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg hover:shadow-xl whitespace-nowrap"
+              title="আপনার সকল পণ্যকে স্বয়ংক্রিয়ভাবে বক্স নম্বার এসাইন করুন"
+            >
+              <span className="text-xl">🎯</span>
+              Auto-Assign Boxes
             </button>
           </div>
         </div>
@@ -651,6 +656,7 @@ export default function Inventory() {
                   <p><span className="font-medium">Category:</span> {category?.name || 'N/A'}</p>
                   <p><span className="font-medium">Fabric:</span> {product.fabric}</p>
                   <p><span className="font-medium">Color:</span> {product.color}</p>
+                  {product.stockLocation && <p><span className="font-medium">📍 Box:</span> <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-bold">{product.stockLocation}</span></p>}
                   <p><span className="font-medium">Sizes:</span> {product.sizes.join(', ')}</p>
                   {product.style && <p><span className="font-medium">Style:</span> {product.style}</p>}
                   {product.occasion && <p><span className="font-medium">Occasion:</span> {product.occasion}</p>}
@@ -1241,6 +1247,17 @@ export default function Inventory() {
                   </div>
 
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">📍 স্টক লোকেশন (BOX-1, BOX-2...)</label>
+                    <input
+                      type="text"
+                      value={editingProduct.stockLocation || ""}
+                      onChange={(e) => setEditingProduct({...editingProduct, stockLocation: e.target.value})}
+                      placeholder="BOX-1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">নির্মাতা</label>
                     <input
                       type="text"
@@ -1329,6 +1346,30 @@ export default function Inventory() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all h-24"
                     placeholder="পণ্যের বিস্তারিত বিবরণ..."
                   />
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">পণ্য ছবির লিংক</label>
+                  <input
+                    type="url"
+                    value={editingProduct.pictureUrl || ""}
+                    onChange={(e) => setEditingProduct({...editingProduct, pictureUrl: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                  {editingProduct.pictureUrl && (
+                    <div className="mt-2">
+                      <img
+                        src={editingProduct.pictureUrl}
+                        alt="Product"
+                        className="h-32 w-32 object-cover rounded border border-gray-300"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

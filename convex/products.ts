@@ -26,6 +26,24 @@ export const list = query({
       products = await ctx.db.query("products").collect();
     }
     
+    // Ensure all products have branchStock initialized
+    const branches = await ctx.db.query("branches").collect();
+    
+    products = products.map(product => {
+      // If branchStock is empty or missing, initialize it with all branches
+      if (!product.branchStock || product.branchStock.length === 0) {
+        const initializeBranchStock = branches.map(branch => ({
+          branchId: branch._id,
+          branchName: branch.name,
+          currentStock: product.currentStock || 0,
+          minStockLevel: product.minStockLevel || 0,
+          maxStockLevel: product.maxStockLevel || 100,
+        }));
+        return { ...product, branchStock: initializeBranchStock };
+      }
+      return product;
+    });
+    
     // Filter by various abaya attributes
     if (args.brand) {
       products = products.filter(product => 
@@ -154,6 +172,8 @@ export const create = mutation({
     barcode: v.optional(v.string()),
     productCode: v.optional(v.string()),
     madeBy: v.optional(v.string()),
+    stockLocation: v.optional(v.string()),
+    pictureUrl: v.optional(v.string()),
     currentStock: v.number(),
     minStockLevel: v.number(),
     maxStockLevel: v.number(),
@@ -241,6 +261,19 @@ export const create = mutation({
     const productCode = args.productCode || `AB${timestamp}`;
     const barcode = args.barcode || `${productCode}${args.sellingPrice.toString().padStart(4, '0')}`;
     
+    // Get all branches to initialize stock levels
+    const allBranches = await ctx.db.query("branches").collect();
+    
+    // Find default branch and initialize branch stock
+    const defaultBranch = allBranches.length > 0 ? allBranches[0] : null;
+    const branchStock = allBranches.map((branch) => ({
+      branchId: branch._id,
+      branchName: branch.name,
+      currentStock: branch._id === defaultBranch?._id ? args.currentStock : 0,
+      minStockLevel: args.minStockLevel,
+      maxStockLevel: args.maxStockLevel,
+    }));
+    
     const productId = await ctx.db.insert("products", {
       name: args.name.trim(),
       brand: args.brand.trim(),
@@ -257,7 +290,9 @@ export const create = mutation({
       productCode,
       barcode,
       madeBy: args.madeBy?.trim() || "",
-      branchStock: [],
+      stockLocation: args.stockLocation?.trim() || "",
+      pictureUrl: args.pictureUrl?.trim() || "",
+      branchStock: branchStock,
       currentStock: args.currentStock,
       minStockLevel: args.minStockLevel,
       maxStockLevel: args.maxStockLevel,
@@ -266,26 +301,20 @@ export const create = mutation({
     });
     
     // Record initial stock movement
-    if (args.currentStock > 0) {
-      // Get first branch as default
-      const defaultBranch = await ctx.db.query("branches").first();
-      
-      // Only record stock movement if a branch exists
-      if (defaultBranch && defaultBranch._id) {
-        await ctx.db.insert("stockMovements", {
-          productId,
-          productName: args.name.trim(),
-          branchId: defaultBranch._id,
-          branchName: defaultBranch.name,
-          type: "in",
-          quantity: args.currentStock,
-          reason: "Initial Stock",
-          userId,
-          userName: user.name || user.email || "Unknown",
-          previousStock: 0,
-          newStock: args.currentStock,
-        });
-      }
+    if (args.currentStock > 0 && defaultBranch) {
+      await ctx.db.insert("stockMovements", {
+        productId,
+        productName: args.name.trim(),
+        branchId: defaultBranch._id,
+        branchName: defaultBranch.name,
+        type: "in",
+        quantity: args.currentStock,
+        reason: "Initial Stock",
+        userId,
+        userName: user.name || user.email || "Unknown",
+        previousStock: 0,
+        newStock: args.currentStock,
+      });
     }
     
     return productId;
@@ -310,6 +339,8 @@ export const update = mutation({
     barcode: v.optional(v.string()),
     productCode: v.optional(v.string()),
     madeBy: v.optional(v.string()),
+    stockLocation: v.optional(v.string()),
+    pictureUrl: v.optional(v.string()),
     minStockLevel: v.number(),
     maxStockLevel: v.number(),
     description: v.optional(v.string()),
@@ -426,6 +457,8 @@ export const update = mutation({
       barcode: updateData.barcode?.trim(),
       productCode: updateData.productCode?.trim(),
       madeBy: updateData.madeBy?.trim(),
+      stockLocation: updateData.stockLocation?.trim(),
+      pictureUrl: updateData.pictureUrl?.trim(),
       minStockLevel: updateData.minStockLevel,
       maxStockLevel: updateData.maxStockLevel,
       description: updateData.description?.trim(),
@@ -640,6 +673,7 @@ export const createWithVariants = mutation({
     costPrice: v.number(),
     sellingPrice: v.number(),
     madeBy: v.optional(v.string()),
+    pictureUrl: v.optional(v.string()),
     minStockLevel: v.number(),
     maxStockLevel: v.number(),
     description: v.optional(v.string()),
@@ -673,6 +707,17 @@ export const createWithVariants = mutation({
     const firstVariant = args.variants[0];
     const totalStock = args.variants.reduce((sum, v) => sum + v.stock, 0);
     
+    // Get all branches to initialize stock levels
+    const allBranches = await ctx.db.query("branches").collect();
+    const defaultBranch = allBranches.length > 0 ? allBranches[0] : null;
+    const branchStock = allBranches.map((branch) => ({
+      branchId: branch._id,
+      branchName: branch.name,
+      currentStock: branch._id === defaultBranch?._id ? totalStock : 0,
+      minStockLevel: args.minStockLevel,
+      maxStockLevel: args.maxStockLevel,
+    }));
+    
     const productId = await ctx.db.insert("products", {
       name: args.name.trim(),
       brand: args.brand.trim(),
@@ -689,7 +734,8 @@ export const createWithVariants = mutation({
       productCode,
       barcode: firstVariant.barcode || `${productCode}001`,
       madeBy: args.madeBy?.trim() || "",
-      branchStock: [],
+      pictureUrl: args.pictureUrl?.trim() || "",
+      branchStock: branchStock,
       currentStock: totalStock,
       minStockLevel: args.minStockLevel,
       maxStockLevel: args.maxStockLevel,
@@ -784,6 +830,95 @@ export const searchWithVariants = query({
     );
     
     return withVariants;
+  },
+});
+
+export const syncBranchStockForAllProducts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const allProducts = await ctx.db.query("products").collect();
+    const allBranches = await ctx.db.query("branches").collect();
+
+    let syncedCount = 0;
+
+    for (const product of allProducts) {
+      // Check if product needs syncing
+      const needsSync =
+        !product.branchStock || product.branchStock.length === 0;
+
+      if (needsSync) {
+        const initializeBranchStock = allBranches.map((branch) => ({
+          branchId: branch._id,
+          branchName: branch.name,
+          currentStock: product.currentStock || 0,
+          minStockLevel: product.minStockLevel || 0,
+          maxStockLevel: product.maxStockLevel || 100,
+        }));
+
+        await ctx.db.patch(product._id, {
+          branchStock: initializeBranchStock,
+        });
+
+        syncedCount++;
+      }
+    }
+
+    return {
+      message: `Synced ${syncedCount} products with branch stock data`,
+      totalProducts: allProducts.length,
+      syncedProducts: syncedCount,
+    };
+  },
+});
+
+export const autoAssignBoxNumbers = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const allProducts = await ctx.db.query("products").collect();
+
+    // Group products by: categoryId + sellingPrice + fabric + embellishments
+    const groupMap = new Map<string, any[]>();
+
+    for (const product of allProducts) {
+      const groupKey = `${product.categoryId || 'no-category'}|${product.sellingPrice}|${product.fabric}|${product.embellishments || 'none'}`;
+      
+      if (!groupMap.has(groupKey)) {
+        groupMap.set(groupKey, []);
+      }
+      groupMap.get(groupKey)!.push(product);
+    }
+
+    // Assign ONE box number to entire group
+    // All products in the same group get the same BOX number
+    let totalAssigned = 0;
+    let groupCount = 0;
+
+    for (const [groupKey, productsInGroup] of groupMap) {
+      groupCount++;
+      const boxNumber = `BOX-${groupCount}`; // সম্পূর্ণ গ্রুপের জন্য একটি BOX
+      
+      // গ্রুপের সব পণ্যকে একই বক্স নম্বার দিন
+      for (const product of productsInGroup) {
+        await ctx.db.patch(product._id, {
+          stockLocation: boxNumber,
+        });
+        totalAssigned++;
+      }
+    }
+
+    return {
+      message: `${totalAssigned}টি পণ্য ${groupCount}টি গ্রুপে দরবস্ত করা হয়েছে`,
+      totalProducts: allProducts.length,
+      groupsCreated: groupCount,
+      productsAssigned: totalAssigned,
+      details: `প্রতিটি গ্রুপের সব পণ্য একটি BOX-এ: ক্যাটাগরি + দাম + ফেব্রিক + কারুকার্য = একটি BOX`,
+    };
   },
 });
 

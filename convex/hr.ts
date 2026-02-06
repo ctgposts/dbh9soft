@@ -2,6 +2,30 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Cross-environment base64 encoder (works in Node, Edge, and browser runtimes)
+function base64Encode(input: string): string {
+  try {
+    if (typeof Buffer !== "undefined") return Buffer.from(input).toString("base64");
+
+    if (typeof TextEncoder !== "undefined" && typeof btoa !== "undefined") {
+      const uint8 = new TextEncoder().encode(input);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        const slice = uint8.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.prototype.slice.call(slice));
+      }
+      return btoa(binary);
+    }
+
+    if (typeof btoa !== "undefined") return btoa(unescape(encodeURIComponent(input)));
+  } catch (e) {
+    // fall through to throw below
+  }
+
+  throw new Error("No base64 encoder available in this environment");
+}
+
 // ============================================
 // EMPLOYEE QUERIES
 // ============================================
@@ -165,7 +189,7 @@ export const createEmployee = mutation({
             fullName: `${args.firstName} ${args.lastName}`,
             email: args.email,
             phone: args.phone,
-            password: Buffer.from("temp-" + args.email).toString("base64"),
+            password: base64Encode("temp-" + args.email),
             roleId: roleDefault._id,
             roleName: roleDefault.roleName,
             branchId: args.branchId,
@@ -183,7 +207,6 @@ export const createEmployee = mutation({
             twoFactorEnabled: false,
             loginAttempts: 0,
             isLocked: false,
-            createdBy: userId.tokenIdentifier as Id<"users">,
             createdByName: userId.email || "System",
             createdAt: Date.now(),
             updatedAt: Date.now(),

@@ -2,6 +2,30 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Cross-environment base64 encoder (works in Node, Edge, and browser runtimes)
+function base64Encode(input: string): string {
+  try {
+    if (typeof Buffer !== "undefined") return Buffer.from(input).toString("base64");
+
+    if (typeof TextEncoder !== "undefined" && typeof btoa !== "undefined") {
+      const uint8 = new TextEncoder().encode(input);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        const slice = uint8.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.prototype.slice.call(slice));
+      }
+      return btoa(binary);
+    }
+
+    if (typeof btoa !== "undefined") return btoa(unescape(encodeURIComponent(input)));
+  } catch (e) {
+    // fall through to throw below
+  }
+
+  throw new Error("No base64 encoder available in this environment");
+}
+
 // ============================================
 // ROLE MANAGEMENT QUERIES & MUTATIONS
 // ============================================
@@ -41,7 +65,6 @@ export const createRole = mutation({
       description: args.description,
       permissions: args.permissions,
       isActive: true,
-      createdBy: userId.tokenIdentifier as Id<"users">,
       createdByName: userId.email || "System",
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -175,7 +198,7 @@ export const createUser = mutation({
     }
 
     // Hash password (in production, use bcrypt)
-    const hashedPassword = Buffer.from(args.password).toString("base64");
+    const hashedPassword = base64Encode(args.password);
 
     const id = await ctx.db.insert("userManagement", {
       userId: args.userId,
@@ -202,7 +225,6 @@ export const createUser = mutation({
       twoFactorEnabled: false,
       loginAttempts: 0,
       isLocked: false,
-      createdBy: userId.tokenIdentifier as Id<"users">,
       createdByName: userId.email || "System",
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -345,7 +367,6 @@ export const updateUser = mutation({
           oldValue: user.status,
           newValue: args.updates.status,
         },
-        changedBy: userId.tokenIdentifier as Id<"users">,
         changedByName: userId.email || "System",
         timestamp: Date.now(),
       });
@@ -382,7 +403,6 @@ export const suspendUser = mutation({
         oldValue: user.status,
         newValue: "suspended",
       },
-      changedBy: userId.tokenIdentifier as Id<"users">,
       changedByName: userId.email || "System",
       reason: args.reason,
       timestamp: Date.now(),
@@ -401,7 +421,7 @@ export const resetUserPassword = mutation({
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("ব্যবহারকারী খুঁজে পাওয়া যায়নি");
 
-    const hashedPassword = Buffer.from(args.newPassword).toString("base64");
+    const hashedPassword = base64Encode(args.newPassword);
 
     await ctx.db.patch(args.userId, {
       password: hashedPassword,
@@ -444,7 +464,6 @@ export const deleteUser = mutation({
         oldValue: user.status,
         newValue: "deleted",
       },
-      changedBy: userId.tokenIdentifier as Id<"users">,
       changedByName: userId.email || "System",
       timestamp: Date.now(),
     });
@@ -646,7 +665,6 @@ export const grantPermissionOverride = mutation({
       userId: args.userId,
       userName: args.userName,
       permission: args.permission,
-      grantedBy: currentUser.tokenIdentifier as Id<"users">,
       grantedByName: currentUser.email || "System",
       grantedAt: Date.now(),
       expiresAt: args.expiresAt,
@@ -691,7 +709,7 @@ export const createPasswordResetToken = mutation({
     email: v.string(),
   },
   handler: async (ctx, args) => {
-    const token = Buffer.from(`${args.email}-${Date.now()}`).toString("base64");
+    const token = base64Encode(`${args.email}-${Date.now()}`);
 
     return await ctx.db.insert("passwordResetTokens", {
       userId: args.userId,
@@ -743,7 +761,7 @@ export const resetPasswordWithToken = mutation({
       throw new Error("টোকেন অবৈধ বা মেয়াদ উত্তীর্ণ");
     }
 
-    const hashedPassword = Buffer.from(args.newPassword).toString("base64");
+    const hashedPassword = base64Encode(args.newPassword);
 
     await ctx.db.patch(resetToken.userId, {
       password: hashedPassword,

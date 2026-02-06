@@ -167,8 +167,6 @@ export const create = mutation({
       notes: args.notes,
       createdAt: now,
       updatedAt: now,
-      createdBy: userId.tokenIdentifier as Id<"users">,
-      lastModifiedBy: userId.tokenIdentifier as Id<"users">,
     });
 
     // Initialize aging record
@@ -230,7 +228,6 @@ export const addPayment = mutation({
       notes: args.notes,
       branchId: outstanding.branchId,
       branchName: outstanding.branchName,
-      recordedBy: userIdentity.tokenIdentifier as Id<"users">,
       recordedByName: userIdentity.name || "Unknown",
     });
 
@@ -249,7 +246,6 @@ export const addPayment = mutation({
       remainingAmount: newRemainingAmount,
       status: newStatus,
       updatedAt: now,
-      lastModifiedBy: userIdentity.tokenIdentifier as Id<"users">,
     });
 
     return paymentId;
@@ -286,7 +282,6 @@ export const addFollowup = mutation({
       notes: args.notes,
       nextFollowupDate: args.nextFollowupDate,
       createdAt: Date.now(),
-      createdBy: userIdentity.tokenIdentifier as Id<"users">,
       createdByName: userIdentity.name || "Unknown",
     });
   },
@@ -373,7 +368,6 @@ export const updateStatus = mutation({
     await ctx.db.patch(args.id, {
       status: args.status,
       updatedAt: Date.now(),
-      lastModifiedBy: userIdentity.tokenIdentifier as Id<"users">,
     });
   },
 });
@@ -390,7 +384,6 @@ export const updateNotes = mutation({
     await ctx.db.patch(args.id, {
       notes: args.notes,
       updatedAt: Date.now(),
-      lastModifiedBy: userIdentity.tokenIdentifier as Id<"users">,
     });
   },
 });

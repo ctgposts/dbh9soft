@@ -203,6 +203,9 @@ const applicationTables = {
     productCode: v.string(),
     madeBy: v.optional(v.string()),
     
+    // Stock location (BOX-1, BOX-2, etc.)
+    stockLocation: v.optional(v.string()),
+    
     // Stock management per branch
     branchStock: v.array(v.object({
       branchId: v.id("branches"),
@@ -827,8 +830,8 @@ const applicationTables = {
     notes: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-    createdBy: v.id("users"),
-    lastModifiedBy: v.id("users"),
+    createdBy: v.optional(v.id("users")),
+    lastModifiedBy: v.optional(v.id("users")),
   })
     .index("by_customer", ["customerId"])
     .index("by_branch", ["branchId"])
@@ -856,7 +859,7 @@ const applicationTables = {
     notes: v.optional(v.string()),
     branchId: v.id("branches"),
     branchName: v.string(),
-    recordedBy: v.id("users"),
+    recordedBy: v.optional(v.id("users")),
     recordedByName: v.string(),
   })
     .index("by_outstanding", ["outstandingId"])
@@ -916,7 +919,7 @@ const applicationTables = {
     notes: v.optional(v.string()),
     nextFollowupDate: v.optional(v.number()),
     createdAt: v.number(),
-    createdBy: v.id("users"),
+    createdBy: v.optional(v.id("users")),
     createdByName: v.string(),
   })
     .index("by_outstanding", ["outstandingId"])
@@ -1336,7 +1339,7 @@ const applicationTables = {
     userId: v.id("userManagement"),
     userName: v.string(),
     permission: v.string(),
-    grantedBy: v.id("users"),
+    grantedBy: v.optional(v.id("users")),
     grantedByName: v.string(),
     grantedAt: v.number(),
     expiresAt: v.optional(v.number()),
@@ -1370,7 +1373,7 @@ const applicationTables = {
       oldValue: v.string(),
       newValue: v.string(),
     }),
-    changedBy: v.id("users"),
+    changedBy: v.optional(v.id("users")),
     changedByName: v.string(),
     reason: v.optional(v.string()),
     timestamp: v.number(),
