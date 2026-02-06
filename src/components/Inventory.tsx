@@ -69,6 +69,7 @@ export default function Inventory() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [imageModalUrl, setImageModalUrl] = useState<string | null>(null);
+  const [imageZoomLevel, setImageZoomLevel] = useState(1);
 
   // New product form state
   const [newProduct, setNewProduct] = useState({
@@ -728,21 +729,85 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* Image Modal */}
+      {/* Image Modal with Zoom */}
       {imageModalUrl && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" onClick={() => setImageModalUrl(null)}>
-          <div className="max-w-4xl max-h-[90vh] relative" onClick={(e) => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" 
+          onClick={() => {
+            setImageModalUrl(null);
+            setImageZoomLevel(1);
+          }}
+        >
+          <div 
+            className="max-w-4xl max-h-[90vh] relative flex flex-col" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
             <button
-              onClick={() => setImageModalUrl(null)}
-              className="absolute top-2 right-2 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
+              onClick={() => {
+                setImageModalUrl(null);
+                setImageZoomLevel(1);
+              }}
+              className="absolute top-2 right-2 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors z-10"
             >
               ✕
             </button>
-            <img
-              src={imageModalUrl}
-              alt="Product"
-              className="max-w-full max-h-[90vh] object-contain rounded-lg"
-            />
+
+            {/* Zoom Controls */}
+            <div className="absolute top-2 left-2 bg-white bg-opacity-90 rounded-lg p-2 flex items-center gap-2 z-10">
+              <button
+                onClick={() => setImageZoomLevel(prev => Math.max(0.5, prev - 0.2))}
+                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
+                title="Zoom Out"
+              >
+                −
+              </button>
+              <span className="text-sm font-medium min-w-[60px] text-center">
+                {Math.round(imageZoomLevel * 100)}%
+              </span>
+              <button
+                onClick={() => setImageZoomLevel(prev => Math.min(3, prev + 0.2))}
+                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
+                title="Zoom In"
+              >
+                +
+              </button>
+              <button
+                onClick={() => setImageZoomLevel(1)}
+                className="px-3 py-1 bg-blue-500 text-white hover:bg-blue-600 rounded text-sm font-medium transition-colors"
+                title="Reset Zoom"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Image Container with Scrollable Zoom */}
+            <div 
+              className="flex-1 overflow-auto flex items-center justify-center bg-black bg-opacity-50 rounded-lg"
+              onWheel={(e) => {
+                e.preventDefault();
+                const newZoom = e.deltaY > 0 
+                  ? Math.max(0.5, imageZoomLevel - 0.1)
+                  : Math.min(3, imageZoomLevel + 0.1);
+                setImageZoomLevel(newZoom);
+              }}
+            >
+              <img
+                src={imageModalUrl}
+                alt="Product"
+                className="max-w-full max-h-full object-contain rounded-lg"
+                style={{
+                  transform: `scale(${imageZoomLevel})`,
+                  transition: 'transform 0.2s ease-out',
+                  cursor: imageZoomLevel > 1 ? 'grab' : 'auto'
+                }}
+              />
+            </div>
+
+            {/* Info Text */}
+            <div className="text-center text-white text-xs mt-2 opacity-70">
+              <p>Use +/− buttons or scroll wheel to zoom • Click outside to close</p>
+            </div>
           </div>
         </div>
       )}
