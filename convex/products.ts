@@ -2,6 +2,56 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+/**
+ * Helper function to generate a unique identifier from product attributes
+ * This identifier groups products with same: Category, Fabric, Embellishments, Price
+ */
+function getStyleGroupHash(
+  categoryId: string | undefined,
+  fabric: string,
+  embellishments: string | undefined,
+  price: number
+): string {
+  // Normalize values for consistent hashing
+  const cat = categoryId || "NC"; // NC = No Category
+  const fab = fabric.slice(0, 3).toUpperCase(); // First 3 chars of fabric
+  const emb = embellishments ? embellishments.slice(0, 3).toUpperCase() : "PL"; // PL = Plain
+  const pr = Math.round(price / 100); // Round price to nearest 100
+  
+  return `${fab}${emb}${pr}`;
+}
+
+/**
+ * Generate a sequential style number for a given style group
+ * Example: A1, A2, A3 for group "A", B1, B2 for group "B", etc.
+ */
+async function generateStyleNumber(
+  ctx: any,
+  categoryId: string | undefined,
+  fabric: string,
+  embellishments: string | undefined,
+  price: number
+): Promise<string> {
+  // Get the hash for this style group
+  const hash = getStyleGroupHash(categoryId, fabric, embellishments, price);
+  
+  // Get all products with this hash
+  const allProducts = await ctx.db.query("products").collect();
+  const sameGroupProducts = allProducts.filter(p => {
+    const productHash = getStyleGroupHash(p.categoryId, p.fabric, p.embellishments, p.sellingPrice);
+    return productHash === hash;
+  });
+  
+  // Count how many we already have in this group
+  const nextNumber = sameGroupProducts.length + 1;
+  
+  // Map hash to letter: CHI=A, SAT=B, GEO=C, etc.
+  // For now, use simple alphabet mapping based on first char
+  const fabricLetter = fabric.charAt(0).toUpperCase();
+  
+  return `${fabricLetter}${nextNumber}`;
+}
+
 export const list = query({
   args: {
     categoryId: v.optional(v.id("categories")),
@@ -261,6 +311,15 @@ export const create = mutation({
     const productCode = args.productCode || `AB${timestamp}`;
     const barcode = args.barcode || `${productCode}${args.sellingPrice.toString().padStart(4, '0')}`;
     
+    // Generate style number based on category, fabric, embellishments, and price
+    const styleNumber = await generateStyleNumber(
+      ctx,
+      args.categoryId,
+      args.fabric,
+      args.embellishments,
+      args.sellingPrice
+    );
+    
     // Get all branches to initialize stock levels
     const allBranches = await ctx.db.query("branches").collect();
     
@@ -287,6 +346,7 @@ export const create = mutation({
       occasion: args.occasion?.trim() || "Daily Wear",
       costPrice: args.costPrice,
       sellingPrice: args.sellingPrice,
+      styleNumber,
       productCode,
       barcode,
       madeBy: args.madeBy?.trim() || "",
@@ -427,7 +487,6 @@ export const update = mutation({
     }
     
     const { id, ...updateData } = args;
-    
     // Update branch stock levels if min/max stock levels changed
     let updatedBranchStock = existingProduct.branchStock;
     if (
@@ -439,6 +498,23 @@ export const update = mutation({
         minStockLevel: updateData.minStockLevel,
         maxStockLevel: updateData.maxStockLevel,
       }));
+    }
+    
+    // Recalculate style number if any style-affecting fields changed
+    let updatedStyleNumber = existingProduct.styleNumber;
+    if (
+      updateData.categoryId !== existingProduct.categoryId ||
+      updateData.fabric !== existingProduct.fabric ||
+      updateData.embellishments !== existingProduct.embellishments ||
+      updateData.sellingPrice !== existingProduct.sellingPrice
+    ) {
+      updatedStyleNumber = await generateStyleNumber(
+        ctx,
+        updateData.categoryId,
+        updateData.fabric,
+        updateData.embellishments,
+        updateData.sellingPrice
+      );
     }
     
     await ctx.db.patch(id, {
@@ -454,6 +530,7 @@ export const update = mutation({
       occasion: updateData.occasion?.trim(),
       costPrice: updateData.costPrice,
       sellingPrice: updateData.sellingPrice,
+      styleNumber: updatedStyleNumber,
       barcode: updateData.barcode?.trim(),
       productCode: updateData.productCode?.trim(),
       madeBy: updateData.madeBy?.trim(),

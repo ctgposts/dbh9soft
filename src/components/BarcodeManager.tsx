@@ -472,7 +472,7 @@ export default function BarcodeManager() {
               width: ${stickerWidthPx}px;
               height: ${stickerHeightPx}px;
               border: 1px solid #000;
-              padding: 2px;
+              padding: 1.5px;
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
@@ -484,40 +484,58 @@ export default function BarcodeManager() {
               position: relative;
               overflow: hidden;
               font-family: 'Arial', 'Helvetica', sans-serif;
+              gap: 0.3px;
             }
             .store-name {
               font-weight: bold;
               font-size: max(${printSettings.fontSize}px, 0.8vh);
               color: #000;
               text-transform: uppercase;
-              letter-spacing: 0.5px;
-              line-height: 1.1;
-              margin-bottom: 1px;
+              letter-spacing: 0.3px;
+              line-height: 1.05;
+              margin: 0 0 0.3px 0;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
               width: 100%;
               text-align: center;
-              padding: 0 1px;
+              padding: 0.5px 0.5px 0 0.5px;
+              flex-shrink: 0;
             }
             .barcode-image {
-              max-width: 95%;
+              max-width: 96%;
               height: auto;
-              max-height: 35px;
-              margin: 0.5px 0;
+              max-height: 32px;
+              margin: 0.3px 0;
+              flex-shrink: 0;
+            }
+            .box-location {
+              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
+              color: #7c3aed;
+              text-align: center;
+              font-weight: bold;
+              width: 100%;
+              margin: 0.2px 0;
+              padding: 0 0.5px;
+              line-height: 1.05;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              flex-shrink: 0;
             }
             .product-name {
               font-weight: normal;
               font-size: max(${printSettings.productNameFontSize}px, 0.7vh);
-              margin: 0.5px 0;
+              margin: 0.2px 0;
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
               width: 100%;
-              line-height: 1.1;
+              line-height: 1.05;
               text-align: center;
               color: #000;
-              padding: 0 1px;
+              padding: 0 0.5px;
+              flex-shrink: 0;
             }
             .bottom-info {
               display: flex;
@@ -525,29 +543,32 @@ export default function BarcodeManager() {
               align-items: center;
               width: 100%;
               margin-top: auto;
-              gap: 2px;
-              margin: 0.5px 0;
-              line-height: 1;
-              padding: 0 1px;
+              gap: 1px;
+              margin: 0.2px 0 0 0;
+              line-height: 1.05;
+              padding: 0 0.5px;
+              flex-shrink: 0;
             }
             .product-price {
               color: #000;
               font-size: max(${printSettings.fontSize + 1}px, 0.75vh);
               font-weight: bold;
-              margin: 0.5px 0;
+              margin: 0.2px 0;
               text-align: center;
               width: 100%;
-              line-height: 1.1;
-              padding: 0 1px;
+              line-height: 1.05;
+              padding: 0 0.5px;
+              flex-shrink: 0;
             }
             .made-by {
               color: #666;
-              font-size: max(8px, 0.6vh);
+              font-size: max(7px, 0.6vh);
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
               text-align: right;
-              line-height: 1;
+              line-height: 1.05;
+              flex-grow: 0;
             }
             .serial-number {
               font-size: max(${printSettings.serialNumberFontSize}px, 0.65vh);
@@ -557,32 +578,46 @@ export default function BarcodeManager() {
               text-overflow: ellipsis;
               font-family: 'Courier New', monospace;
               text-align: left;
-              line-height: 1;
-            }
-            .product-size {
-              display: none;
-            }
-            .product-color {
-              display: none;
+              line-height: 1.05;
+              flex-grow: 0;
+              font-weight: bold;
             }
             .size-color-row {
-              display: none;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              width: 100%;
+              gap: 2px;
+              margin: 0.2px 0;
+              line-height: 1.05;
+              flex-shrink: 0;
+            }
+            .product-size {
+              flex: 1;
+              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
+              color: #333;
+              text-align: left;
+              font-weight: normal;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              padding: 0 0.5px;
+              line-height: 1.05;
+            }
+            .product-color {
+              flex: 1;
+              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
+              color: #333;
+              text-align: right;
+              font-weight: normal;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              padding: 0 0.5px;
+              line-height: 1.05;
             }
             .variant-circle {
-              width: 22px;
-              height: 22px;
-              border-radius: 50%;
-              background: transparent;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin: 0.5px auto 0;
-              font-weight: bold;
-              font-size: max(11px, 0.9vh);
-              color: #7c3aed;
-              border: 1.5px solid #7c3aed;
-              line-height: 1;
-              flex-shrink: 0;
+              display: none;
             }
             .print-controls {
               position: fixed;
@@ -671,7 +706,8 @@ export default function BarcodeManager() {
         stickerCount++;
         
         const barcodeImage = generateBarcode(product.barcode);
-        const serialNumber = getProductSerialNumber(product._id);
+        // Use styleNumber instead of serial number - styleNumber groups products by Category + Fabric + Embellishments + Price
+        const styleNumber = product.styleNumber || "N/A";
         const variantId = getVariantId(product);
         
         // Extract base product name (remove color and size info after " - ")
@@ -685,10 +721,13 @@ export default function BarcodeManager() {
             ${printSettings.includeName ? `<div class="product-name">${baseProductName}</div>` : ''}
             ${printSettings.includePrice ? `<div class="product-price">৳${product.sellingPrice.toLocaleString('en-BD')}</div>` : ''}
             <img src="${barcodeImage}" alt="Barcode" class="barcode-image" />
-            <div class="variant-circle">${variantId}</div>
-            ${product.stockLocation ? `<div class="stock-location" style="font-size: max(9px, 0.7vh); color: #7c3aed; font-weight: bold; margin: 0.5px 0; text-align: center; width: 100%;">📍 ${product.stockLocation}</div>` : ''}
+            ${product.stockLocation ? `<div class="box-location">${product.stockLocation}</div>` : '<div class="box-location">N/A</div>'}
+            <div class="size-color-row">
+              <div class="product-size">${product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'N/A'}</div>
+              <div class="product-color">${product.color || 'N/A'}</div>
+            </div>
             <div class="bottom-info">
-              ${printSettings.includeSerialNumber ? `<div class="serial-number">${serialNumber}</div>` : '<div></div>'}
+              ${printSettings.includeSerialNumber ? `<div class="serial-number">${styleNumber}</div>` : '<div></div>'}
               ${printSettings.includeMadeBy && product.madeBy ? `<div class="made-by">${product.madeBy}</div>` : '<div></div>'}
             </div>
           </div>
@@ -1137,17 +1176,36 @@ export default function BarcodeManager() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Serial Number Font Size (px)
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      DBH Code (Serial Number) Font Size
                     </label>
-                    <input
-                      type="number"
-                      min="5"
-                      max="12"
-                      value={printSettings.serialNumberFontSize}
-                      onChange={(e) => setPrintSettings({...printSettings, serialNumberFontSize: Number(e.target.value)})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="5"
+                        max="14"
+                        value={printSettings.serialNumberFontSize}
+                        onChange={(e) => setPrintSettings({...printSettings, serialNumberFontSize: Number(e.target.value)})}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                      <div className="w-16 text-center">
+                        <input
+                          type="number"
+                          min="5"
+                          max="14"
+                          value={printSettings.serialNumberFontSize}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            if (val >= 5 && val <= 14) {
+                              setPrintSettings({...printSettings, serialNumberFontSize: val});
+                            }
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-center text-sm font-semibold text-purple-600"
+                        />
+                        <span className="text-xs text-gray-500">px</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Adjusts the font size for DBH code display (e.g., DBH-0001)</p>
                   </div>
                   
                   <div className="space-y-2 mt-4">
@@ -1247,40 +1305,24 @@ export default function BarcodeManager() {
                     <div className="my-1">
                       <div className="bg-black h-6 w-full mb-1"></div>
                     </div>
+                    <div className="text-center font-bold" style={{ fontSize: `${printSettings.productSizeFontSize}px`, color: '#7c3aed', margin: '0.2px 0' }}>
+                      Box-Room A1
+                    </div>
                     {printSettings.includeSize && (
-                      <div className="flex justify-between w-full gap-1" style={{ fontSize: `${printSettings.productSizeFontSize}px`, margin: '1px 0' }}>
+                      <div className="flex justify-between w-full gap-1" style={{ fontSize: `${printSettings.productSizeFontSize}px`, margin: '0.2px 0' }}>
                         <div className="text-left">{printSettings.customSizeDisplay || 'M,L,XL'}</div>
                         <div className="text-right text-gray-600">Red</div>
                       </div>
                     )}
-                    <div className="flex justify-center w-full my-2">
-                      <div style={{
-                        width: '50px',
-                        height: '50px',
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '20px',
-                        color: 'white',
-                        boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)',
-                        border: '2px solid #5b21b6'
-                      }}>
-                        #25
-                      </div>
+                    <div className="w-full mt-auto px-0.5 text-center" style={{ fontSize: `${printSettings.serialNumberFontSize}px`, fontFamily: 'monospace', color: '#333', fontWeight: 'bold', margin: '0.2px 0' }}>
+                      A1
                     </div>
-                    <div className="flex justify-between w-full mt-auto gap-1">
+                    <div className="flex justify-between w-full text-xs text-gray-500 gap-0.5">
                       {printSettings.includeSerialNumber && (
-                        <div className="text-gray-600 text-left" style={{ fontSize: `${printSettings.serialNumberFontSize}px`, fontFamily: 'monospace' }}>
-                          DBH-0001
-                        </div>
+                        <div>Style #{printSettings.serialNumberFontSize}px</div>
                       )}
                       {printSettings.includeMadeBy && (
-                        <div className="text-gray-600 text-right" style={{ fontSize: '10px' }}>
-                          Dubai
-                        </div>
+                        <div>Dubai</div>
                       )}
                     </div>
                   </div>

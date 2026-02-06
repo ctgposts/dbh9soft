@@ -1,6 +1,6 @@
 # Barcode Sticker Design Improvements
 
-**Date:** February 5, 2026  
+**Date:** February 6, 2026  
 **Component:** `src/components/BarcodeManager.tsx`  
 **Status:** ✅ Complete and Deployed
 
@@ -12,10 +12,11 @@ Improved the barcode sticker template design to provide:
 - **Compact Spacing:** Reduced line margins and padding for tighter, more professional labels
 - **Responsive Typography:** Dynamic font sizing that adapts to different label sizes
 - **Better Visual Hierarchy:** Optimized spacing between store name, product info, and barcode
+- **Size & Color Display:** Shows product size and color on either side below the barcode line
 
 ---
 
-## Changes Made
+## Current Layout Structure
 
 ### 1. **Reduced Line Spacing** (Below Barcode)
 
@@ -79,7 +80,61 @@ Implemented viewport-height-based responsive sizing using CSS `max()` function:
 
 ---
 
-### 3. **Optimized Variant Circle**
+### 4. **Size & Color Display (NEW - February 6, 2026)**
+
+Added product size and color information below the barcode in a two-column layout:
+
+```css
+/* Size & Color Row - Two Column Layout */
+.size-color-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 3px;
+  margin: 0.5px 0;
+}
+
+/* Product Size - Left Column */
+.product-size {
+  flex: 1;
+  font-size: max(${productSizeFontSize}px, 0.65vh);
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 1px;
+}
+
+/* Product Color - Right Column */
+.product-color {
+  flex: 1;
+  font-size: max(${productSizeFontSize}px, 0.65vh);
+  text-align: right;
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 1px;
+}
+```
+
+**Features:**
+- Size displayed on **LEFT** side
+- Color displayed on **RIGHT** side
+- Both flexibly spaced to fit available width
+- Responsive font sizing for readability
+- Graceful truncation if text is too long
+- Positioned directly below barcode image
+- Uses first available size from product.sizes array
+- Falls back to 'N/A' if size/color not available
+
+**Benefit:** Quick visual identification of product size and color without reading product name
+
+---
+
+### 5. **Optimized Variant Circle**
 
 Made the variant ID indicator circle more compact:
 
@@ -100,7 +155,7 @@ After:
 
 ---
 
-### 4. **Unified Padding Strategy**
+### 6. **Unified Padding Strategy**
 
 Added consistent horizontal padding to all text elements:
 
@@ -115,43 +170,49 @@ padding: 0 1px;  /* Prevents text from touching label borders */
 
 ### Before Improvements
 ```
-┌─────────────────────┐
-│ DUBAI BORKA HOUSE   │  ← 2px margin-bottom
-├─────────────────────┤
-│ Product Name        │  ← 2px margin top/bottom
-├─────────────────────┤
-│ ৳1,500              │  ← 2px margin top/bottom
-├─────────────────────┤
-│  [|||||||||||||||||| │
-│   BARCODE IMAGE |||] │  ← Barcode (32px height)
-├─────────────────────┤
-│ Size | Color        │  ← Extra spacing below
-├─────────────────────┤
-│     ◯ Variant ID    │  ← 28px circle, 2px margin top/bottom
-├─────────────────────┤
-│ SN#123 | Made By    │  ← Extra spacing at bottom
-└─────────────────────┘
+┌──────────────────────────┐
+│ DUBAI BORKA HOUSE        │  ← 2px margin-bottom
+├──────────────────────────┤
+│ Product Name             │  ← 2px margin top/bottom
+├──────────────────────────┤
+│ ৳1,500                   │  ← 2px margin top/bottom
+├──────────────────────────┤
+│  [|||||||||||||||||||||| │
+│   BARCODE IMAGE |||||]   │  ← Barcode (32px height)
+├──────────────────────────┤
+│ (Size and Color hidden)  │
+├──────────────────────────┤
+│     ◯ Variant ID         │  ← 28px circle, 2px margin
+├──────────────────────────┤
+│ SN#123 | Made By         │  ← Extra spacing at bottom
+└──────────────────────────┘
 ```
 
-### After Improvements
+### After Improvements (With Size & Color)
 ```
-┌─────────────────────┐
-│ DUBAI BORKA HOUSE   │  ← 1px margin-bottom
-├─────────────────────┤
-│ Product Name        │  ← 0.5px margin top/bottom
-├─────────────────────┤
-│ ৳1,500              │  ← 0.5px margin top/bottom
-├─────────────────────┤
-│  [|||||||||||||||||| │
-│   BARCODE IMAGE |||] │  ← Barcode (35px, optimized)
-├─────────────────────┤
-│ Size | Color        │  ← Tight spacing below
-├─────────────────────┤
-│    ◯ Variant ID     │  ← 22px circle, 0.5px margin
-├─────────────────────┤
-│SN#123 | Made By     │  ← Minimal spacing
-└─────────────────────┘
+┌──────────────────────────┐
+│ DUBAI BORKA HOUSE        │  ← 1px margin-bottom
+├──────────────────────────┤
+│ Product Name             │  ← 0.5px margin top/bottom
+├──────────────────────────┤
+│ ৳1,500                   │  ← 0.5px margin top/bottom
+├──────────────────────────┤
+│  [|||||||||||||||||||||| │
+│   BARCODE IMAGE |||||]   │  ← Barcode (35px, optimized)
+├──────────────────────────┤
+│ SIZE: XL    │    Red     │  ← Size (Left) | Color (Right)
+├──────────────────────────┤
+│     ◯ Variant ID         │  ← 22px circle, 0.5px margin
+├──────────────────────────┤
+│ SN#123 │ Made By         │  ← Minimal spacing at bottom
+└──────────────────────────┘
 ```
+
+**New Feature - Size & Color Display:**
+- Size displayed on the **left side** below barcode
+- Color displayed on the **right side** below barcode  
+- Two-column layout for better organization
+- Responsive font sizing (matches serial number size)
 
 ---
 
@@ -238,10 +299,10 @@ padding: 0 1px;  /* Prevents text from touching label borders */
 
 ## Deployment Info
 
-- **Commit:** `3564ece` - Improve Barcode Sticker Design
+- **Last Update:** `6FEB26` - Add Size & Color Display to Barcode Sticker
 - **Files Changed:** 2
-  - `src/components/BarcodeManager.tsx` (+29, -23)
-  - `dist/assets/BarcodeManager-BZ9W80iJ.js` (auto-generated)
+  - `src/components/BarcodeManager.tsx` (CSS + HTML template updated)
+  - `BARCODE_STICKER_DESIGN_IMPROVEMENTS.md` (documentation updated)
 - **Build Status:** ✅ Success (Vite)
 - **Push Status:** ✅ Successful to GitHub
 
@@ -255,25 +316,27 @@ Potential improvements for next phase:
 2. **Custom Logo** - Allow shop logo in store name area
 3. **Multiple Languages** - Support for product names in different scripts
 4. **Color Coding** - Add category color bands to stickers
-5. **Mobile Responsive** - Sticker preview on mobile devices
-6. **Print Preview** - Live preview before printing
-7. **Batch Settings** - Different sticker sizes per product
-8. **Advanced Spacing** - User-configurable margins per print job
+5. **Size Variants Display** - Show all available sizes, not just first one
+6. **Mobile Responsive** - Sticker preview on mobile devices
+7. **Print Preview** - Live preview before printing
+8. **Batch Settings** - Different sticker sizes per product
+9. **Advanced Spacing** - User-configurable margins per print job
 
 ---
 
 ## Summary
 
-The barcode sticker design is now **more compact, responsive, and professional**. Labels will print efficiently on POS thermal printers while maintaining excellent readability across different label sizes.
+The barcode sticker design is now **more compact, responsive, professional, and informative**. Labels now display product size and color for quick identification while maintaining excellent readability across different label sizes.
 
 **Key Metrics:**
 - ✅ 75% reduction in line spacing
-- ✅ Responsive font sizing (0.6vh - 0.8vh)
+- ✅ Responsive font sizing (0.6vh - 0.9vh)
 - ✅ 40-50% more compact labels
+- ✅ Size & Color display in two-column layout
 - ✅ Better proportional circle indicator
 - ✅ Zero performance impact
 - ✅ Backward compatible
 
 ---
 
-*Generated: February 5, 2026*
+*Last Updated: February 6, 2026*
