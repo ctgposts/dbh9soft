@@ -560,35 +560,13 @@ export default function BarcodeManager() {
               line-height: 1;
             }
             .product-size {
-              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
-              color: #333;
-              margin: 0px 0;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              flex: 1;
-              text-align: left;
-              line-height: 1;
-            }
-            .size-color-row {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              width: 100%;
-              margin: 0.5px 0;
-              gap: 2px;
-              line-height: 1;
-              padding: 0 1px;
+              display: none;
             }
             .product-color {
-              font-size: max(${printSettings.productSizeFontSize}px, 0.65vh);
-              color: #333;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              text-align: right;
-              line-height: 1;
-              flex: 1;
+              display: none;
+            }
+            .size-color-row {
+              display: none;
             }
             .variant-circle {
               width: 22px;
@@ -707,12 +685,6 @@ export default function BarcodeManager() {
             ${printSettings.includeName ? `<div class="product-name">${product.name}</div>` : ''}
             ${printSettings.includePrice ? `<div class="product-price">৳${product.sellingPrice.toLocaleString('en-BD')}</div>` : ''}
             <img src="${barcodeImage}" alt="Barcode" class="barcode-image" />
-            ${(printSettings.includeSize || product.color) ? `
-              <div class="size-color-row">
-                ${sizeDisplay && printSettings.includeSize ? `<div class="product-size">${sizeDisplay}</div>` : '<div></div>'}
-                ${product.color ? `<div class="product-color">${product.color}</div>` : '<div></div>'}
-              </div>
-            ` : ''}
             <div class="variant-circle">${variantId}</div>
             ${product.stockLocation ? `<div class="stock-location" style="font-size: max(9px, 0.7vh); color: #7c3aed; font-weight: bold; margin: 0.5px 0; text-align: center; width: 100%;">📍 ${product.stockLocation}</div>` : ''}
             <div class="bottom-info">

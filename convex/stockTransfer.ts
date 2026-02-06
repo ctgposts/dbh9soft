@@ -215,13 +215,12 @@ export const receive = mutation({
         return bs;
       });
 
-      // Update global stock (already deducted from source, now added to destination)
-      const newGlobalStock =
-        product.currentStock + item.quantity;
+      // NOTE: Do NOT update global stock here - it was already updated during ship
+      // The global stock decreases when shipped from source, and is already accounted for.
+      // We only update the destination branch stock here.
 
       await ctx.db.patch(item.productId, {
         branchStock: updatedBranchStock,
-        currentStock: newGlobalStock,
       });
 
       // Log transaction
