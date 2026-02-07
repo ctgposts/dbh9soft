@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
@@ -147,28 +147,76 @@ export default function HRPayroll() {
   const [showPayrollForm, setShowPayrollForm] = useState(false);
   const [payrollDate, setPayrollDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedPayrollMonth, setSelectedPayrollMonth] = useState(new Date().getMonth() + 1);
+  const [selectedPayrollYear, setSelectedPayrollYear] = useState(new Date().getFullYear());
+  const [selectedPayrollForDetail, setSelectedPayrollForDetail] = useState<Payroll | null>(null);
 
   // Performance
   const [showPerformanceForm, setShowPerformanceForm] = useState(false);
+  const [performanceData, setPerformanceData] = useState({
+    employeeId: "",
+    reportingManagerId: "",
+    evaluationPeriodStart: "",
+    evaluationPeriodEnd: "",
+    technicalSkills: 5,
+    communicationSkills: 5,
+    teamworkSkills: 5,
+    leadershipSkills: 5,
+    strengths: "",
+    areasForImprovement: "",
+  });
+  const [isSubmittingPerformance, setIsSubmittingPerformance] = useState(false);
+
+  // Leave approval
+  const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
+  const [approvalComment, setApprovalComment] = useState("");
+
+  // Performance detail
+  const [selectedPerformance, setSelectedPerformance] = useState<Performance | null>(null);
+
+  // Attendance history
+  const [attendanceRecords, setAttendanceRecords] = useState<Attendance[]>([]);
+  const [selectedAttendanceDateRange, setSelectedAttendanceDateRange] = useState({
+    fromDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    toDate: new Date().toISOString().split("T")[0],
+  });
 
   // Queries
   const employees = useQuery(api.hr.listEmployees, {});
   const branches = useQuery(api.branches.list, {});
   const categories = useQuery(api.categories.list, {});
   const payrolls = useQuery(api.hr.getPayrollByMonth, {
-    payrollMonth: new Date().getMonth() + 1,
+    payrollMonth: selectedPayrollMonth,
   });
   const leaves = useQuery(api.hr.getLeaveRequests, {});
   const hrSummary = useQuery(api.hr.getHRSummary, {});
+  const performances = useQuery(api.hr.getPerformanceReviews, {});
+  
+  // Attendance query with date range
+  const attendanceQuery = useQuery(api.hr.getEmployeeAttendance, {
+    employeeId: selectedEmployee?._id || ("" as Id<"hrEmployees">),
+    fromDate: selectedAttendanceDateRange.fromDate ? new Date(selectedAttendanceDateRange.fromDate).getTime() : 0,
+    toDate: selectedAttendanceDateRange.toDate ? new Date(selectedAttendanceDateRange.toDate).getTime() : Date.now(),
+  });
+
+  // UseEffect to populate attendance records when query updates
+  useEffect(() => {
+    if (attendanceQuery) {
+      setAttendanceRecords(attendanceQuery);
+    }
+  }, [attendanceQuery]);
 
   // Mutations
   const createEmployee = useMutation(api.hr.createEmployee);
   const markAttendance = useMutation(api.hr.markAttendance);
   const requestLeave = useMutation(api.hr.requestLeave);
   const approveLeave = useMutation(api.hr.approveLeave);
+  const rejectLeave = useMutation(api.hr.rejectLeave);
   const generatePayroll = useMutation(api.hr.generatePayroll);
   const approvePayroll = useMutation(api.hr.approvePayroll);
   const createPerformanceReview = useMutation(api.hr.createPerformanceReview);
+  const updateEmployee = useMutation(api.hr.updateEmployee);
+  const processPayrollPayment = useMutation(api.hr.processPayrollPayment);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -334,6 +382,125 @@ export default function HRPayroll() {
       console.error(error);
     } finally {
       setIsSubmittingLeave(false);
+    }
+  };
+
+  const handleApproveLeave = async (leaveId: Id<"hrLeaves">) => {
+    try {
+      // Use the first HR manager or a default manager ID
+      const manager = employees?.find((e) => e.department === "HR") || employees?.[0];
+      if (!manager) {
+        toast.error("কোনো ম্যানেজার পাওয়া যায়নি");
+        return;
+      }
+      await approveLeave({
+        leaveId,
+        approvedBy: manager._id,
+        approvedByName: manager.fullName,
+        comments: approvalComment,
+      });
+      toast.success("ছুটি অনুমোদিত হয়েছে!");
+      setSelectedLeave(null);
+      setApprovalComment("");
+    } catch (error) {
+      toast.error("ছুটি অনুমোদন করতে ব্যর্থ");
+      console.error(error);
+    }
+  };
+
+  const handleRejectLeave = async (leaveId: Id<"hrLeaves">) => {
+    try {
+      await rejectLeave({
+        leaveId,
+        rejectionReason: approvalComment || "প্রশাসকীয় কারণে প্রত্যাখ্যাত",
+      });
+      toast.success("ছুটি প্রত্যাখ্যাত হয়েছে!");
+      setSelectedLeave(null);
+      setApprovalComment("");
+    } catch (error) {
+      toast.error("ছুটি প্রত্যাখ্যান করতে ব্যর্থ");
+      console.error(error);
+    }
+  };
+
+  const handleCreatePerformanceReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!performanceData.employeeId || !performanceData.reportingManagerId) {
+      toast.error("কর্মচারী এবং ম্যানেজার নির্বাচন করুন");
+      return;
+    }
+
+    setIsSubmittingPerformance(true);
+    try {
+      const employee = employees?.find((e) => e._id === performanceData.employeeId);
+      const manager = employees?.find((e) => e._id === performanceData.reportingManagerId);
+
+      await createPerformanceReview({
+        employeeId: performanceData.employeeId as Id<"hrEmployees">,
+        employeeName: employee?.fullName || "",
+        reportingManagerId: performanceData.reportingManagerId as Id<"hrEmployees">,
+        reportingManagerName: manager?.fullName || "",
+        branchId: employee?.branchId || ("" as Id<"branches">),
+        branchName: employee?.branchName || "",
+        evaluationPeriodStart: new Date(performanceData.evaluationPeriodStart).getTime(),
+        evaluationPeriodEnd: new Date(performanceData.evaluationPeriodEnd).getTime(),
+        technicalSkills: performanceData.technicalSkills,
+        communicationSkills: performanceData.communicationSkills,
+        teamworkSkills: performanceData.teamworkSkills,
+        leadershipSkills: performanceData.leadershipSkills,
+        strengths: performanceData.strengths,
+        areasForImprovement: performanceData.areasForImprovement,
+      });
+
+      toast.success("পারফরম্যান্স রিভিউ তৈরি হয়েছে!");
+      setShowPerformanceForm(false);
+      setPerformanceData({
+        employeeId: "",
+        reportingManagerId: "",
+        evaluationPeriodStart: "",
+        evaluationPeriodEnd: "",
+        technicalSkills: 5,
+        communicationSkills: 5,
+        teamworkSkills: 5,
+        leadershipSkills: 5,
+        strengths: "",
+        areasForImprovement: "",
+      });
+    } catch (error) {
+      toast.error("পারফরম্যান্স রিভিউ তৈরি করতে ব্যর্থ");
+      console.error(error);
+    } finally {
+      setIsSubmittingPerformance(false);
+    }
+  };
+
+  const handleApprovePayroll = async (payrollId: Id<"hrPayroll">) => {
+    try {
+      // Use a default admin user ID - in production, get this from auth context
+      const adminUserId = "admin" as Id<"users">;
+      await approvePayroll({
+        payrollId,
+        approvedBy: adminUserId,
+        approvedByName: "Admin",
+      });
+      toast.success("বেতন অনুমোদিত হয়েছে!");
+    } catch (error) {
+      toast.error("বেতন অনুমোদন করতে ব্যর্থ");
+      console.error(error);
+    }
+  };
+
+  const handleProcessPayrollPayment = async (payrollId: Id<"hrPayroll">) => {
+    try {
+      await processPayrollPayment({
+        payrollId,
+        paymentMethod: "bank_transfer",
+        notes: "বেতন পেমেন্ট প্রক্রিয়া করা হয়েছে",
+      });
+      toast.success("বেতন পেমেন্ট সম্পন্ন হয়েছে!");
+    } catch (error) {
+      toast.error("বেতন পেমেন্ট প্রক্রিয়া করতে ব্যর্থ");
+      console.error(error);
     }
   };
 
@@ -594,12 +761,23 @@ export default function HRPayroll() {
               <h2 className="text-2xl font-bold">{selectedEmployee.fullName}</h2>
               <p className="text-gray-600">{selectedEmployee.designation}</p>
             </div>
-            <button
-              onClick={() => setSelectedEmployee(null)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedEmployee(null)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              >
+                ফিরে যান
+              </button>
+              <button
+                onClick={() => {
+                  // Handle edit functionality
+                  toast.info("সম্পাদনা বৈশিষ্ট্য শীঘ্রই উপলব্ধ হবে");
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Edit2 size={16} /> সম্পাদনা করুন
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -779,6 +957,94 @@ export default function HRPayroll() {
               </div>
             </form>
           )}
+
+          {/* Attendance History */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-4">উপস্থিতি ইতিহাস</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">শুরুর তারিখ</label>
+                <input
+                  type="date"
+                  value={selectedAttendanceDateRange.fromDate}
+                  onChange={(e) =>
+                    setSelectedAttendanceDateRange({ ...selectedAttendanceDateRange, fromDate: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">শেষ তারিখ</label>
+                <input
+                  type="date"
+                  value={selectedAttendanceDateRange.toDate}
+                  onChange={(e) =>
+                    setSelectedAttendanceDateRange({ ...selectedAttendanceDateRange, toDate: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-100 border-b">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">কর্মচারী</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">তারিখ</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">স্ট্যাটাস</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">চেক-ইন</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">চেক-আউট</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold">কাজের ঘণ্টা</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceRecords?.length > 0 ? (
+                    attendanceRecords.map((att) => (
+                      <tr key={att._id} className="border-b hover:bg-gray-50">
+                        <td className="px-6 py-4 font-medium">{att.employeeName}</td>
+                        <td className="px-6 py-4 text-sm">
+                          {new Date(att.attendanceDate).toLocaleDateString("bn-BD")}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              att.status === "present"
+                                ? "bg-green-100 text-green-700"
+                                : att.status === "absent"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}
+                          >
+                            {att.status === "present"
+                              ? "উপস্থিত"
+                              : att.status === "absent"
+                              ? "অনুপস্থিত"
+                              : "অন্যান্য"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString("bn-BD") : "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString("bn-BD") : "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold">
+                          {att.workingHours ? att.workingHours.toFixed(2) : "-"}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        কোনো উপস্থিতি রেকর্ড পাওয়া যায়নি
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -884,6 +1150,9 @@ export default function HRPayroll() {
 
           {/* Leave Requests */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold">ছুটির অনুরোধ</h3>
+            </div>
             <table className="w-full">
               <thead className="bg-gray-100 border-b">
                 <tr>
@@ -892,7 +1161,9 @@ export default function HRPayroll() {
                   <th className="px-6 py-3 text-left text-sm font-semibold">শুরু</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold">শেষ</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold">দিন</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">কারণ</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold">স্ট্যাটাস</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody>
@@ -907,6 +1178,9 @@ export default function HRPayroll() {
                       {new Date(leave.endDate).toLocaleDateString("bn-BD")}
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold">{leave.totalDays}</td>
+                    <td className="px-6 py-4 text-sm max-w-xs truncate" title={leave.reason}>
+                      {leave.reason}
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -920,11 +1194,83 @@ export default function HRPayroll() {
                         {leave.status === "approved" ? "অনুমোদিত" : leave.status === "pending" ? "অপেক্ষমান" : "প্রত্যাখ্যাত"}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm">
+                      {leave.status === "pending" && (
+                        <button
+                          onClick={() => setSelectedLeave(leave)}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          পর্যালোচনা
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Leave Approval Modal */}
+          {selectedLeave && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <h2 className="text-2xl font-bold mb-4">ছুটি অনুমোদন পর্যালোচনা</h2>
+                
+                <div className="space-y-3 mb-4 pb-4 border-b">
+                  <div>
+                    <p className="text-sm text-gray-600">কর্মচারী</p>
+                    <p className="font-semibold">{selectedLeave.employeeName}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">ধরন</p>
+                    <p className="font-semibold">{selectedLeave.leaveType}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">মোট দিন</p>
+                    <p className="font-semibold">{selectedLeave.totalDays}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">কারণ</p>
+                    <p className="font-semibold">{selectedLeave.reason}</p>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold mb-2">মন্তব্য (ঐচ্ছিক)</label>
+                  <textarea
+                    value={approvalComment}
+                    onChange={(e) => setApprovalComment(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg"
+                    rows={3}
+                  ></textarea>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApproveLeave(selectedLeave._id)}
+                    className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    অনুমোদন করুন
+                  </button>
+                  <button
+                    onClick={() => handleRejectLeave(selectedLeave._id)}
+                    className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 font-medium"
+                  >
+                    প্রত্যাখ্যান করুন
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedLeave(null);
+                      setApprovalComment("");
+                    }}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 font-medium"
+                  >
+                    বাতিল করুন
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -981,8 +1327,62 @@ export default function HRPayroll() {
             </form>
           )}
 
+          {/* Month & Year Filter */}
+          <div className="bg-white p-4 rounded-lg shadow grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2">মাস নির্বাচন করুন</label>
+              <select
+                value={selectedPayrollMonth}
+                onChange={(e) => setSelectedPayrollMonth(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                <option value={1}>জানুয়ারি</option>
+                <option value={2}>ফেব্রুয়ারি</option>
+                <option value={3}>মার্চ</option>
+                <option value={4}>এপ্রিল</option>
+                <option value={5}>মে</option>
+                <option value={6}>জুন</option>
+                <option value={7}>জুলাই</option>
+                <option value={8}>আগস্ট</option>
+                <option value={9}>সেপ্টেম্বর</option>
+                <option value={10}>অক্টোবর</option>
+                <option value={11}>নভেম্বর</option>
+                <option value={12}>ডিসেম্বর</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2">বছর নির্বাচন করুন</label>
+              <select
+                value={selectedPayrollYear}
+                onChange={(e) => setSelectedPayrollYear(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {[2024, 2025, 2026, 2027].map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  const now = new Date();
+                  setSelectedPayrollMonth(now.getMonth() + 1);
+                  setSelectedPayrollYear(now.getFullYear());
+                }}
+                className="w-full px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 font-medium"
+              >
+                এই মাস
+              </button>
+            </div>
+          </div>
+
           {/* Payroll Table */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold">বেতন তালিকা</h3>
+            </div>
             <table className="w-full">
               <thead className="bg-gray-100 border-b">
                 <tr>
@@ -992,6 +1392,7 @@ export default function HRPayroll() {
                   <th className="px-6 py-3 text-left text-sm font-semibold">কাটছাঁট</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold">নিট বেতন</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold">স্ট্যাটাস</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">অ্যাকশন</th>
                 </tr>
               </thead>
               <tbody>
@@ -1025,17 +1426,152 @@ export default function HRPayroll() {
                           : "গণনা করা"}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm space-x-2">
+                      <button
+                        onClick={() => setSelectedPayrollForDetail(payroll)}
+                        className="text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        বিস্তারিত
+                      </button>
+                      {payroll.status === "calculated" && (
+                        <button
+                          onClick={() => handleApprovePayroll(payroll._id)}
+                          className="text-green-600 hover:text-green-800 font-medium ml-2"
+                        >
+                          অনুমোদন
+                        </button>
+                      )}
+                      {payroll.status === "approved" && (
+                        <button
+                          onClick={() => handleProcessPayrollPayment(payroll._id)}
+                          className="text-blue-600 hover:text-blue-800 font-medium ml-2"
+                        >
+                          পেমেন্ট করুন
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {payrolls && payrolls.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                এই মাসের জন্য কোনো বেতন রেকর্ড নেই। প্রথমে বেতন তৈরি করুন।
+              </div>
+            )}
           </div>
+
+          {/* Payroll Detail Modal */}
+          {selectedPayrollForDetail && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+                <div className="flex justify-between items-start mb-6">
+                  <h2 className="text-2xl font-bold">বেতন বিবরণী</h2>
+                  <button
+                    onClick={() => setSelectedPayrollForDetail(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <h3 className="font-semibold mb-3 text-lg border-b pb-2">কর্মচারী তথ্য</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm text-gray-600">নাম</p>
+                        <p className="font-semibold">{selectedPayrollForDetail.employeeName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">মাস</p>
+                        <p className="font-semibold">{selectedPayrollForDetail.payrollMonthName}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold mb-3 text-lg border-b pb-2">বেতন সংক্ষিপ্ত</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>মোট উপার্জন:</span>
+                        <span className="font-semibold">৳{selectedPayrollForDetail.grossSalary?.toLocaleString() || 0}</span>
+                      </div>
+                      <div className="flex justify-between text-red-600">
+                        <span>মোট কাটছাঁট:</span>
+                        <span className="font-semibold">-৳{selectedPayrollForDetail.totalDeductions?.toLocaleString() || 0}</span>
+                      </div>
+                      <div className="flex justify-between text-green-600 border-t-2 pt-2">
+                        <span className="font-bold">নিট বেতন:</span>
+                        <span className="font-bold text-lg">৳{selectedPayrollForDetail.netSalary?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                  <h3 className="font-semibold mb-3">অতিরিক্ত তথ্য</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">অবস্থা</p>
+                      <p className="font-semibold">
+                        {selectedPayrollForDetail.status === "paid"
+                          ? "প্রদত্ত"
+                          : selectedPayrollForDetail.status === "approved"
+                          ? "অনুমোদিত"
+                          : "গণনা করা"}
+                      </p>
+                    </div>
+                    {selectedPayrollForDetail.paidDate && (
+                      <div>
+                        <p className="text-sm text-gray-600">পেমেন্টের তারিখ</p>
+                        <p className="font-semibold">
+                          {new Date(selectedPayrollForDetail.paidDate).toLocaleDateString("bn-BD")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  {selectedPayrollForDetail.status === "calculated" && (
+                    <button
+                      onClick={() => {
+                        handleApprovePayroll(selectedPayrollForDetail._id);
+                        setSelectedPayrollForDetail(null);
+                      }}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium"
+                    >
+                      অনুমোদন করুন
+                    </button>
+                  )}
+                  {selectedPayrollForDetail.status === "approved" && (
+                    <button
+                      onClick={() => {
+                        handleProcessPayrollPayment(selectedPayrollForDetail._id);
+                        setSelectedPayrollForDetail(null);
+                      }}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
+                    >
+                      পেমেন্ট করুন
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedPayrollForDetail(null)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 font-medium"
+                  >
+                    বন্ধ করুন
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Performance Tab */}
       {activeTab === "performance" && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="space-y-4">
           <button
             onClick={() => setShowPerformanceForm(!showPerformanceForm)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 mb-6"
@@ -1044,14 +1580,277 @@ export default function HRPayroll() {
           </button>
 
           {showPerformanceForm && (
-            <div className="bg-gray-50 p-6 rounded-lg mb-6">
-              <p className="text-gray-600 text-center">পারফরম্যান্স রিভিউ ফর্ম এখানে যুক্ত হবে...</p>
-            </div>
+            <form
+              onSubmit={handleCreatePerformanceReview}
+              className="bg-white rounded-lg shadow p-6 grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
+            >
+              <div>
+                <label className="block text-sm font-semibold mb-2">কর্মচারী</label>
+                <select
+                  value={performanceData.employeeId}
+                  onChange={(e) => setPerformanceData({ ...performanceData, employeeId: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                >
+                  <option value="">নির্বাচন করুন</option>
+                  {employees?.map((emp) => (
+                    <option key={emp._id} value={emp._id}>
+                      {emp.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">রিপোর্টিং ম্যানেজার</label>
+                <select
+                  value={performanceData.reportingManagerId}
+                  onChange={(e) => setPerformanceData({ ...performanceData, reportingManagerId: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                >
+                  <option value="">নির্বাচন করুন</option>
+                  {employees?.map((emp) => (
+                    <option key={emp._id} value={emp._id}>
+                      {emp.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">মূল্যায়ন শুরু</label>
+                <input
+                  type="date"
+                  value={performanceData.evaluationPeriodStart}
+                  onChange={(e) => setPerformanceData({ ...performanceData, evaluationPeriodStart: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">মূল্যায়ন শেষ</label>
+                <input
+                  type="date"
+                  value={performanceData.evaluationPeriodEnd}
+                  onChange={(e) => setPerformanceData({ ...performanceData, evaluationPeriodEnd: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">প্রযুক্তিগত দক্ষতা (১-১০)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={performanceData.technicalSkills}
+                  onChange={(e) => setPerformanceData({ ...performanceData, technicalSkills: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">যোগাযোগ দক্ষতা (১-১০)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={performanceData.communicationSkills}
+                  onChange={(e) => setPerformanceData({ ...performanceData, communicationSkills: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">টিমওয়ার্ক দক্ষতা (১-১০)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={performanceData.teamworkSkills}
+                  onChange={(e) => setPerformanceData({ ...performanceData, teamworkSkills: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">নেতৃত্ব দক্ষতা (১-১০)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={performanceData.leadershipSkills}
+                  onChange={(e) => setPerformanceData({ ...performanceData, leadershipSkills: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-2">শক্তি</label>
+                <textarea
+                  value={performanceData.strengths}
+                  onChange={(e) => setPerformanceData({ ...performanceData, strengths: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  rows={3}
+                  required
+                ></textarea>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-2">উন্নতির ক্ষেত্র</label>
+                <textarea
+                  value={performanceData.areasForImprovement}
+                  onChange={(e) => setPerformanceData({ ...performanceData, areasForImprovement: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  rows={3}
+                  required
+                ></textarea>
+              </div>
+
+              <div className="md:col-span-2 flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmittingPerformance}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isSubmittingPerformance ? "তৈরি করছে..." : "তৈরি করুন"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPerformanceForm(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  বাতিল করুন
+                </button>
+              </div>
+            </form>
           )}
 
-          <div className="text-center text-gray-500 py-8">
-            আরও ডেটা দেখতে কর্মচারীরা যুক্ত করুন
+          {/* Performance Reviews List */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b">
+              <h3 className="text-lg font-semibold">পারফরম্যান্স রিভিউ</h3>
+            </div>
+            <table className="w-full">
+              <thead className="bg-gray-100 border-b">
+                <tr>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">কর্মচারী</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">মূল্যায়ন শুরু</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">মূল্যায়ন শেষ</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">সামগ্রিক স্কোর</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">স্ট্যাটাস</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold">অ্যাকশন</th>
+                </tr>
+              </thead>
+              <tbody>
+                {performances && performances.length > 0 ? (
+                  performances.map((perf) => (
+                    <tr key={perf._id} className="border-b hover:bg-gray-50">
+                      <td className="px-6 py-4 font-medium">{perf.employeeName}</td>
+                      <td className="px-6 py-4 text-sm">
+                        {new Date(perf.evaluationPeriodStart).toLocaleDateString("bn-BD")}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        {new Date(perf.evaluationPeriodEnd).toLocaleDateString("bn-BD")}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold">{perf.overallScore?.toFixed(2)}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          perf.status === "submitted"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {perf.status === "submitted" ? "জমা দেওয়া হয়েছে" : "খসড়া"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => setSelectedPerformance(perf)}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          বিস্তারিত
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                      কোনো পারফরম্যান্স রিভিউ পাওয়া যায়নি
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
+
+          {/* Performance Detail Modal */}
+          {selectedPerformance && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-start mb-6">
+                  <h2 className="text-2xl font-bold">পারফরম্যান্স বিবরণী</h2>
+                  <button
+                    onClick={() => setSelectedPerformance(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-3 text-lg">বেসিক তথ্য</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">কর্মচারী নাম</p>
+                        <p className="font-semibold">{selectedPerformance.employeeName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">মূল্যায়ন সময়কাল</p>
+                        <p className="font-semibold">
+                          {new Date(selectedPerformance.evaluationPeriodStart).toLocaleDateString("bn-BD")} - {new Date(selectedPerformance.evaluationPeriodEnd).toLocaleDateString("bn-BD")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">সামগ্রিক স্কোর</p>
+                        <p className="font-bold text-2xl text-blue-600">{selectedPerformance.overallScore?.toFixed(2)}/10</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">স্ট্যাটাস</p>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          selectedPerformance.status === "submitted"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {selectedPerformance.status === "submitted" ? "জমা দেওয়া হয়েছে" : "খসড়া"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                    <h3 className="font-semibold mb-2">পারফরম্যান্স মূল্যায়ন সারসংক্ষেপ</h3>
+                    <p className="text-sm text-gray-700">
+                      এই নিযুক্তি সময়কালে কর্মীর সামগ্রিক কর্মক্ষমতা মূল্যায়ন করা হয়েছে এবং {selectedPerformance.overallScore?.toFixed(2)} স্কোর প্রাপ্ত হয়েছে।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-6">
+                  <button
+                    onClick={() => setSelectedPerformance(null)}
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    বন্ধ করুন
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
