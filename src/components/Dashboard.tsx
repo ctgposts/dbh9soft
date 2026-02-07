@@ -46,12 +46,16 @@ export function Dashboard() {
   
   // ✅ FIX: Extract items array from paginated products query response
   const productsResponse = useQuery(api.products.list, {});
-  const products = productsResponse?.items || [];
-  const sales = useQuery(api.sales.list, {}) || [];
-  const categories = useQuery(api.categories.list) || [];
-  const customers = useQuery(api.customers.list, {}) || [];
+  const products = Array.isArray(productsResponse?.items) ? productsResponse.items : [];
+  const salesData = useQuery(api.sales.list, {});
+  const sales = Array.isArray(salesData) ? salesData : [];
+  const categoriesData = useQuery(api.categories.list);
+  const categories = Array.isArray(categoriesData) ? categoriesData : [];
+  const customersData = useQuery(api.customers.list, {});
+  const customers = customersData?.items && Array.isArray(customersData.items) ? customersData.items : [];
   const storeSettings = useQuery(api.settings.get);
-  const refunds = useQuery(api.refunds.list, {}) || [];
+  const refundsData = useQuery(api.refunds.list, {});
+  const refunds = Array.isArray(refundsData) ? refundsData : [];
   
   const { isOnline, isSyncing } = useOfflineSync();
   
@@ -67,14 +71,14 @@ export function Dashboard() {
 
   // Recent sales (last 7 days)
   const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  const recentSales = sales?.filter(sale => sale._creationTime >= sevenDaysAgo) || [];
-  const totalRecentSales = recentSales.reduce((sum, sale) => sum + sale.total, 0);
+  const recentSales = Array.isArray(sales) ? sales.filter(sale => sale._creationTime >= sevenDaysAgo) : [];
+  const totalRecentSales = Array.isArray(recentSales) ? recentSales.reduce((sum, sale) => sum + sale.total, 0) : 0;
 
   // Today's sales
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const todaysSales = sales?.filter(sale => sale._creationTime >= today.getTime()) || [];
-  const todayTotal = todaysSales.reduce((sum, sale) => sum + sale.total, 0);
+  const todaysSales = Array.isArray(sales) ? sales.filter(sale => sale._creationTime >= today.getTime()) : [];
+  const todayTotal = Array.isArray(todaysSales) ? todaysSales.reduce((sum, sale) => sum + sale.total, 0) : 0;
 
   // Refund statistics
   const totalRefunds = refunds?.length || 0;
@@ -86,7 +90,8 @@ export function Dashboard() {
   // Top selling products
   const productSales = new Map<string, { name: string; quantity: number; revenue: number }>();
   
-  sales?.forEach(sale => {
+  if (Array.isArray(sales)) {
+  sales.forEach(sale => {
     sale.items.forEach(item => {
       const existing = productSales.get(item.productId) || { name: item.productName, quantity: 0, revenue: 0 };
       existing.quantity += item.quantity;
@@ -94,6 +99,7 @@ export function Dashboard() {
       productSales.set(item.productId, existing);
     });
   });
+  }
 
   const topProducts = Array.from(productSales.values())
     .sort((a, b) => b.quantity - a.quantity)
@@ -315,7 +321,7 @@ export function Dashboard() {
                 <div className="bg-gradient-to-r from-purple-50 to-purple-100/50 rounded-lg p-3 sm:p-4 border border-purple-200">
                   <div className="flex justify-between items-start gap-2 mb-1 sm:mb-2">
                     <p className="text-xs font-semibold text-purple-700 uppercase">Total</p>
-                    <p className="text-lg sm:text-2xl font-bold text-purple-900 text-right">৳{sales.reduce((sum, sale) => sum + sale.total, 0).toLocaleString('en-BD')}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-purple-900 text-right">৳{Array.isArray(sales) ? sales.reduce((sum, sale) => sum + sale.total, 0).toLocaleString('en-BD') : '0'}</p>
                   </div>
                   <p className="text-xs text-purple-700">{sales.length} txn</p>
                 </div>
@@ -385,7 +391,7 @@ export function Dashboard() {
               <div className="flex items-start justify-between mb-2 sm:mb-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Avg Sale</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">৳{sales.length > 0 ? Math.round(sales.reduce((sum, sale) => sum + sale.total, 0) / sales.length).toLocaleString('en-BD') : '0'}</p>
+                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">৳{Array.isArray(sales) && sales.length > 0 ? Math.round(sales.reduce((sum, sale) => sum + sale.total, 0) / sales.length).toLocaleString('en-BD') : '0'}</p>
                 </div>
                 <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-orange-100 border border-orange-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">📈</div>
               </div>
@@ -397,7 +403,7 @@ export function Dashboard() {
               <div className="flex items-start justify-between mb-2 sm:mb-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Turnover</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalAbayas > 0 ? Math.round((sales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0) / totalAbayas) * 100) : 0}%</p>
+                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalAbayas > 0 && Array.isArray(sales) ? Math.round((sales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0) / totalAbayas) * 100) : 0}%</p>
                 </div>
                 <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-red-100 border border-red-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">🔄</div>
               </div>
