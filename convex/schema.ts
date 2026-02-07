@@ -307,6 +307,8 @@ const applicationTables = {
       phone: v.optional(v.string()),
       charges: v.optional(v.number()),
     })),
+    // ✅ FIX #17: Track which coupon code was applied to the sale
+    couponCode: v.optional(v.string()),
   })
     .index("by_branch", ["branchId"])
     .index("by_customer", ["customerId"])

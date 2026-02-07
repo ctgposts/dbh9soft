@@ -6,6 +6,34 @@ import { useNotificationSystem, NotificationPresets } from "../hooks/useNotifica
 import { NotificationAlertsPanel, NotificationIcon, DashboardAlertsSummary } from "./NotificationAlertsPanel";
 import { useState, useEffect, useRef } from "react";
 
+// Skeleton component for loading cards
+const MetricCardSkeleton = () => (
+  <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-6 animate-pulse">
+    <div className="flex items-start justify-between mb-2 sm:mb-4">
+      <div className="flex-1">
+        <div className="h-3 bg-slate-200 rounded w-24" />
+        <div className="h-8 sm:h-10 bg-slate-200 rounded w-16 mt-2" />
+      </div>
+      <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-slate-200" />
+    </div>
+    <div className="h-3 bg-slate-200 rounded w-32" />
+  </div>
+);
+
+const SalesCardSkeleton = () => (
+  <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 animate-pulse">
+    <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-slate-200 rounded" />
+      <div className="h-6 bg-slate-200 rounded w-40" />
+    </div>
+    <div className="space-y-3">
+      {[1, 2, 3].map(() => (
+        <div key={Math.random()} className="h-20 bg-slate-100 rounded" />
+      ))}
+    </div>
+  </div>
+);
+
 export function Dashboard() {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const { notify } = useNotificationSystem();
@@ -16,7 +44,9 @@ export function Dashboard() {
   const notifiedProductsRef = useRef<Set<string>>(new Set());
   const notifiedCriticalRef = useRef<Set<string>>(new Set());
   
-  const products = useQuery(api.products.list, {}) || [];
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, {});
+  const products = productsResponse?.items || [];
   const sales = useQuery(api.sales.list, {}) || [];
   const categories = useQuery(api.categories.list) || [];
   const customers = useQuery(api.customers.list, {}) || [];
@@ -24,37 +54,39 @@ export function Dashboard() {
   const refunds = useQuery(api.refunds.list, {}) || [];
   
   const { isOnline, isSyncing } = useOfflineSync();
+  
+  // Check if data is still loading - check if queries are undefined (loading state)
+  const isLoading = productsResponse === undefined || !sales;
 
-  // Calculate stats
-  const totalProducts = products.length;
-  const totalAbayas = products.reduce((sum, product) => sum + product.currentStock, 0);
-  const lowStockProducts = products.filter(p => p.currentStock <= p.minStockLevel);
-  const totalValue = products.reduce((sum, product) => 
-    sum + (product.sellingPrice * product.currentStock), 0
-  );
+  // Calculate stats - only when data is available
+  const totalProducts = products?.length || 0;
+  const totalAbayas = products?.reduce((sum, product) => sum + product.currentStock, 0) || 0;
+  const lowStockProducts = products?.filter(p => p.currentStock <= p.minStockLevel) || [];
+  const totalValue = products?.reduce((sum, product) => 
+    sum + (product.sellingPrice * product.currentStock), 0) || 0;
 
   // Recent sales (last 7 days)
   const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  const recentSales = sales.filter(sale => sale._creationTime >= sevenDaysAgo);
+  const recentSales = sales?.filter(sale => sale._creationTime >= sevenDaysAgo) || [];
   const totalRecentSales = recentSales.reduce((sum, sale) => sum + sale.total, 0);
 
   // Today's sales
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const todaysSales = sales.filter(sale => sale._creationTime >= today.getTime());
+  const todaysSales = sales?.filter(sale => sale._creationTime >= today.getTime()) || [];
   const todayTotal = todaysSales.reduce((sum, sale) => sum + sale.total, 0);
 
   // Refund statistics
-  const totalRefunds = refunds.length;
-  const totalRefundAmount = refunds.reduce((sum, r) => sum + r.refundAmount, 0);
-  const pendingRefunds = refunds.filter(r => r.approvalStatus === "pending_approval");
-  const completedRefunds = refunds.filter(r => r.status === "completed");
-  const refundRate = sales.length > 0 ? ((totalRefunds / sales.length) * 100).toFixed(1) : "0";
+  const totalRefunds = refunds?.length || 0;
+  const totalRefundAmount = refunds?.reduce((sum, r) => sum + r.refundAmount, 0) || 0;
+  const pendingRefunds = refunds?.filter(r => r.approvalStatus === "pending_approval") || [];
+  const completedRefunds = refunds?.filter(r => r.status === "completed") || [];
+  const refundRate = (sales?.length || 0) > 0 ? (((refunds?.length || 0) / (sales?.length || 0)) * 100).toFixed(1) : "0";
 
   // Top selling products
   const productSales = new Map<string, { name: string; quantity: number; revenue: number }>();
   
-  sales.forEach(sale => {
+  sales?.forEach(sale => {
     sale.items.forEach(item => {
       const existing = productSales.get(item.productId) || { name: item.productName, quantity: 0, revenue: 0 };
       existing.quantity += item.quantity;
@@ -183,60 +215,77 @@ export function Dashboard() {
       {/* Main Content */}
       <div className="px-2.5 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-12 w-full max-w-screen-2xl mx-auto">
         <div className="space-y-4 sm:space-y-6 lg:space-y-8">
-          {/* Metrics Row 1: Responsive Grid */}
+          {/* Metrics Row 1: Responsive Grid - Show skeletons while loading */}
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
-            {/* Card 1: Total Bundles */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
-              <div className="flex items-start justify-between mb-2 sm:mb-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Bundles</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalProducts}</p>
+            {isLoading ? (
+              <>
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+              </>
+            ) : (
+              <>
+                {/* Card 1: Total Bundles */}
+                <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Bundles</p>
+                      <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalProducts}</p>
+                    </div>
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">📦</div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600">In inventory</p>
                 </div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">📦</div>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-600">In inventory</p>
-            </div>
 
-            {/* Card 2: In Stock */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
-              <div className="flex items-start justify-between mb-2 sm:mb-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">In Stock</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalAbayas}</p>
+                {/* Card 2: In Stock */}
+                <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">In Stock</p>
+                      <p className="text-2xl sm:text-4xl font-bold text-slate-900">{totalAbayas}</p>
+                    </div>
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">👗</div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600">Ready sale</p>
                 </div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">👗</div>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-600">Ready sale</p>
-            </div>
 
-            {/* Card 3: Low Stock Items */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
-              <div className="flex items-start justify-between mb-2 sm:mb-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Low</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">{lowStockProducts.length}</p>
+                {/* Card 3: Low Stock Items */}
+                <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Low</p>
+                      <p className="text-2xl sm:text-4xl font-bold text-slate-900">{lowStockProducts.length}</p>
+                    </div>
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-yellow-100 border border-yellow-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">⚠️</div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600">Restock</p>
                 </div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-yellow-100 border border-yellow-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">⚠️</div>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-600">Restock</p>
-            </div>
 
-            {/* Card 4: Inventory Value */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
-              <div className="flex items-start justify-between mb-2 sm:mb-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Value</p>
-                  <p className="text-2xl sm:text-4xl font-bold text-slate-900">৳{(totalValue / 100000).toFixed(1)}L</p>
+                {/* Card 4: Inventory Value */}
+                <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all p-3 sm:p-6">
+                  <div className="flex items-start justify-between mb-2 sm:mb-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 sm:mb-2">Value</p>
+                      <p className="text-2xl sm:text-4xl font-bold text-slate-900">৳{(totalValue / 100000).toFixed(1)}L</p>
+                    </div>
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">💰</div>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600">Stock worth</p>
                 </div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">💰</div>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-600">Stock worth</p>
-            </div>
+              </>
+            )}
           </div>
 
-          {/* Sales Section: Responsive Cards */}
+          {/* Sales Section: Responsive Cards - Show skeletons while loading */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Sales Overview Card */}
+            {isLoading ? (
+              <>
+                <SalesCardSkeleton />
+                <SalesCardSkeleton />
+              </>
+            ) : (
+            <>
             <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6">
               <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
                 <span className="text-xl sm:text-2xl">💵</span>
@@ -301,6 +350,8 @@ export function Dashboard() {
                 )}
               </div>
             </div>
+              </>
+            )}
           </div>
 
           {/* Metrics Row 2: 5 Cards (Mobile: 2x3 Grid) */}

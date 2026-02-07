@@ -10,15 +10,16 @@ interface ProductVariant {
   stock: number;
 }
 
-// Function to generate random alphanumeric prefix with timestamp
+// Function to generate random alphanumeric prefix with timestamp - improved for uniqueness
 const generateRandomPrefix = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const timestamp = Date.now().toString().slice(-4); // Last 4 digits of timestamp
+  const timestamp = Date.now().toString().slice(-5); // Last 5 digits of timestamp for better uniqueness
+  const randomComponent = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3-digit random
   let result = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 3; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `${result}${timestamp}`;
+  return `${result}${timestamp}${randomComponent}`; // Format: ABC1234567890 (13 chars total)
 };
 
 // Function to generate next model number
@@ -40,6 +41,70 @@ const generateNextModelNumber = (existingProducts: any[]) => {
   const nextNumber = maxNumber + 1;
   
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+};
+
+// ✅ FIX #5: Image compression function with proper Canvas context handling
+const compressImage = (file: File, quality: number = 0.7, maxWidth: number = 1200, maxHeight: number = 1200): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        
+        // Calculate new dimensions to fit within max bounds while maintaining aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // ✅ FIX #5: Safe Canvas context check
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get Canvas context. Canvas 2D API not available.'));
+          return;
+        }
+        
+        try {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          
+            // Log compression info
+            const originalSize = (file.size / 1024).toFixed(2);
+            const compressedSize = (compressedDataUrl.length / 1024).toFixed(2);
+            console.log(`📦 Image compressed: ${originalSize}KB → ${compressedSize}KB (${Math.round((1 - parseFloat(compressedSize)/parseFloat(originalSize)) * 100)}% reduction)`);
+            
+            resolve(compressedDataUrl);
+        } catch (error) {
+          reject(new Error(`Image processing failed: ${error instanceof Error ? error.message : String(error)}`));
+        }
+        };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+      
+      img.src = event.target?.result as string;
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'));
+    };
+    
+    reader.readAsDataURL(file);
+  });
 };
 
 // Function to auto-generate product name from Category + Fabric + Embellishments
@@ -102,7 +167,9 @@ export default function Inventory() {
     { id: `variant-${Date.now()}`, color: "", size: "", stock: 0 }
   ]);
 
-  const products = useQuery(api.products.list, {}) || [];
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, {});
+  const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list) || [];
   const addProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
@@ -184,12 +251,17 @@ export default function Inventory() {
     let filtered = products.filter(product => {
       const searchLower = searchTerm.toLowerCase();
       
-      // Check standard search fields
+      // ✅ FIX #8: Enhanced variant search - search by barcode, color, size, and productCode
       const matchesStandardSearch = !searchTerm || 
         product.name.toLowerCase().includes(searchLower) ||
         product.brand.toLowerCase().includes(searchLower) ||
         product.productCode.toLowerCase().includes(searchLower) ||
-        product.barcode.toLowerCase().includes(searchLower);
+        product.barcode.toLowerCase().includes(searchLower) ||
+        // Search by color + size combination for variant lookup
+        (product.color && `${product.color.toLowerCase()} ${product.sizes?.join(' ').toLowerCase() || ''}`.includes(searchLower)) ||
+        // Search by individual color or size
+        (product.color && product.color.toLowerCase().includes(searchLower)) ||
+        (product.sizes && product.sizes.some(s => s.toLowerCase().includes(searchLower)));
       
       // Check serial number search (if product has sequential serial)
       const serialNumber = serialNumberMap.get(product._id);
@@ -278,10 +350,17 @@ export default function Inventory() {
         toast.error("Selling price cannot be negative");
         return;
       }
-      // If selling price is 0, it's optional (POS system will use default)
+      // ✅ FIX #10: Enforce selling price >= cost price to prevent negative margins
+      if (newProduct.sellingPrice > 0 && newProduct.sellingPrice < newProduct.costPrice) {
+        toast.error(`Selling price (৳${newProduct.sellingPrice}) cannot be less than cost price (৳${newProduct.costPrice})`);
+        return;
+      }
+      // If selling price is 0, require explicit user confirmation
       if (newProduct.sellingPrice === 0) {
-        // Warning but allow - system will use POS price
-        console.log("Selling price is 0 - system will use POS default price");
+        const confirmed = window.confirm(
+          "Selling price is 0. The POS system will need to set a price manually at checkout.\n\nContinue anyway?"
+        );
+        if (!confirmed) return;
       }
 
       // Auto-generate barcode if not provided
@@ -520,17 +599,85 @@ export default function Inventory() {
                 Manage your product inventory and stock levels
               </p>
             </div>
-            <button
-              onClick={() => {
-                setShowAddProduct(true);
-                // Reset variants when opening modal
-                setProductVariants([{ id: `variant-${Date.now()}`, color: "", size: "", stock: 0 }]);
-              }}
-              className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold transition-all duration-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 shadow-lg hover:shadow-xl whitespace-nowrap"
-            >
-              <span className="text-xl">➕</span>
-              Add New Product
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  setShowAddProduct(true);
+                  // Reset variants when opening modal
+                  setProductVariants([{ id: `variant-${Date.now()}`, color: "", size: "", stock: 0 }]);
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold transition-all duration-300 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 shadow-lg hover:shadow-xl whitespace-nowrap"
+              >
+                <span className="text-xl">➕</span>
+                Add New Product
+              </button>
+              
+              {/* ✅ FIX #16: CSV Batch Import Button */}
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.csv';
+                  input.onchange = async (e: any) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = async (event) => {
+                        try {
+                          const csv = event.target?.result as string;
+                          const lines = csv.split('\n').filter(line => line.trim());
+                          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                          
+                          let importedCount = 0;
+                          for (let i = 1; i < lines.length; i++) {
+                            const values = lines[i].split(',').map(v => v.trim());
+                            const productData: any = {};
+                            headers.forEach((header, idx) => {
+                              productData[header] = values[idx] || '';
+                            });
+                            
+                            if (productData.name && productData.brand) {
+                              try {
+                                await createProduct({
+                                  name: productData.name,
+                                  brand: productData.brand,
+                                  categoryId: productData.categoryid || '',
+                                  fabric: productData.fabric || 'Jersey',
+                                  color: productData.color || 'Black',
+                                  sizes: (productData.sizes || '').split(';').filter((s: string) => s),
+                                  costPrice: parseFloat(productData.costprice) || 100,
+                                  sellingPrice: parseFloat(productData.sellingprice) || 200,
+                                  currentStock: parseInt(productData.currentstock) || 0,
+                                  minStockLevel: parseInt(productData.minstocklevel) || 5,
+                                  maxStockLevel: parseInt(productData.maxstocklevel) || 100,
+                                  barcode: productData.barcode || generateRandomPrefix(),
+                                  productCode: productData.productcode || generateRandomPrefix(),
+                                  isActive: productData.isactive !== 'false',
+                                });
+                                importedCount++;
+                              } catch (err) {
+                                console.error(`Failed to import row ${i}:`, err);
+                              }
+                            }
+                          }
+                          toast.success(`✅ Batch imported ${importedCount} products from CSV!`);
+                        } catch (error) {
+                          console.error('CSV import error:', error);
+                          toast.error('Failed to import CSV. Check format and try again.');
+                        }
+                      };
+                      reader.readAsText(file);
+                    }
+                  };
+                  input.click();
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-all duration-300 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 shadow-lg hover:shadow-xl whitespace-nowrap"
+                title="Import products from CSV (columns: name, brand, fabric, color, sizes, costprice, sellingprice, currentstock)"
+              >
+                <span className="text-xl">📥</span>
+                Import CSV
+              </button>
+            </div>
             
             <button
               onClick={async () => {
@@ -704,7 +851,9 @@ export default function Inventory() {
                 <div className="mt-3 pt-3 border-t border-gray-200">
                   <div className="flex justify-between items-center text-sm">
                     <div>
-                      <p className="text-gray-600">Stock: <span className="font-semibold">{product.currentStock}</span></p>
+                      <p className="text-gray-600">Stock: <span className="font-semibold text-lg text-purple-600">{product.currentStock}</span></p>
+                      {/* ✅ FIX #14: Show min/max levels */}
+                      <p className="text-xs text-gray-500 mt-1">Min: {product.minStockLevel} | Max: {product.maxStockLevel}</p>
                       <p className="text-gray-600">Code: <span className="font-mono text-xs">{product.productCode}</span></p>
                     </div>
                     <div className="text-right">
@@ -712,9 +861,43 @@ export default function Inventory() {
                       <p className="font-semibold text-purple-600">৳{product.sellingPrice}</p>
                     </div>
                   </div>
+                  
+                  {/* ✅ FIX #14: Alert when stock below minimum */}
+                  {product.currentStock <= product.minStockLevel && product.currentStock > 0 && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      ⚠️ Low Stock Alert: {product.minStockLevel - product.currentStock} units below minimum
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                {/* ✅ FIX #13: Quick Stock Update */}
+                <div className="mt-3 flex gap-1">
+                  <button
+                    onClick={() => {
+                      const newStock = product.currentStock + 1;
+                      updateProduct({
+                        ...product,
+                        currentStock: newStock,
+                      });
+                    }}
+                    className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 font-medium transition-colors"
+                    title="Add 1 unit"
+                  >
+                    +1
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newStock = Math.max(0, product.currentStock - 1);
+                      updateProduct({
+                        ...product,
+                        currentStock: newStock,
+                      });
+                    }}
+                    className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 font-medium transition-colors"
+                    title="Remove 1 unit"
+                  >
+                    -1
+                  </button>
                   <button
                     onClick={() => setEditingProduct(product)}
                     className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium transition-colors"
@@ -723,7 +906,7 @@ export default function Inventory() {
                   </button>
                   <button
                     onClick={() => handleDeleteProduct(product._id)}
-                    className="flex-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 font-medium transition-colors"
+                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 font-medium transition-colors"
                   >
                     Delete
                   </button>
@@ -1245,8 +1428,33 @@ export default function Inventory() {
 
                     <div className="sm:col-span-2 lg:col-span-3">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Picture URL
+                        Product Image
                       </label>
+                      
+                      {/* ✅ FIX #15: Image Upload with Compression */}
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              try {
+                                const compressed = await compressImage(file);
+                                setNewProduct({...newProduct, pictureUrl: compressed});
+                                toast.success("Image compressed and ready!");
+                              } catch (error) {
+                                toast.error("Failed to compress image");
+                                console.error(error);
+                              }
+                              e.target.value = ""; // Reset input
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
+                        />
+                        <span className="text-xs text-gray-500 self-center">Or paste URL:</span>
+                      </div>
+                      
                       <input
                         type="url"
                         value={newProduct.pictureUrl}
@@ -1254,7 +1462,7 @@ export default function Inventory() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
                         placeholder="https://example.com/image.jpg"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Click product image to view in fullscreen after adding</p>
+                      <p className="text-xs text-gray-500 mt-1">✅ Upload JPG/PNG (auto-compressed) or paste image URL</p>
                       {newProduct.pictureUrl && (
                         <div className="mt-2">
                           <img
@@ -1498,7 +1706,32 @@ export default function Inventory() {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">পণ্য ছবির লিংক</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">পণ্যের ছবি</label>
+                  
+                  {/* ✅ FIX #15: File upload with compression in edit form */}
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const compressed = await compressImage(file);
+                            setEditingProduct({...editingProduct, pictureUrl: compressed});
+                            toast.success("Image compressed and updated!");
+                          } catch (error) {
+                            toast.error("Failed to compress image");
+                            console.error(error);
+                          }
+                          e.target.value = ""; // Reset input
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                    <span className="text-xs text-gray-500 self-center">Or paste URL:</span>
+                  </div>
+                  
                   <input
                     type="url"
                     value={editingProduct.pictureUrl || ""}
@@ -1506,6 +1739,7 @@ export default function Inventory() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
                     placeholder="https://example.com/image.jpg"
                   />
+                  <p className="text-xs text-gray-500 mt-1">✅ Upload JPG/PNG (auto-compressed) or paste URL</p>
                   {editingProduct.pictureUrl && (
                     <div className="mt-2">
                       <img
@@ -1585,11 +1819,11 @@ export default function Inventory() {
                     <input
                       type="number"
                       value={editingProduct.currentStock || 0}
-                      readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                      onChange={(e) => setEditingProduct({...editingProduct, currentStock: Number(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                       min="0"
                     />
-                    <p className="text-xs text-gray-500 mt-1">(শাখা জুড়ে মোট)</p>
+                    <p className="text-xs text-gray-500 mt-1">✅ এখন সম্পাদনযোগ্য - শাখা জুড়ে মোট</p>
                   </div>
 
                   <div>

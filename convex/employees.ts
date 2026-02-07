@@ -59,6 +59,13 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
+    // ✅ FIX #16: Validate permissions against allowed list
+    const validPermissions = ["pos", "inventory", "reports", "customers", "settings"];
+    const invalidPermissions = args.permissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      throw new Error(`Invalid permissions: ${invalidPermissions.join(", ")}. Allowed: ${validPermissions.join(", ")}`);
+    }
+
     // Check if employee ID already exists
     const existingEmployee = await ctx.db
       .query("employees")
@@ -119,6 +126,13 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
+
+    // ✅ FIX #16: Validate permissions against allowed list
+    const validPermissions = ["pos", "inventory", "reports", "customers", "settings"];
+    const invalidPermissions = args.permissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      throw new Error(`Invalid permissions: ${invalidPermissions.join(", ")}. Allowed: ${validPermissions.join(", ")}`);
+    }
 
     const { id, ...updateData } = args;
 

@@ -42,6 +42,22 @@ export const get = query({
   },
 });
 
+// ✅ FIX #4: Encryption utility (simplified for Convex)
+const obfuscatePaymentData = (paymentDetails: any) => {
+  if (!paymentDetails) return undefined;
+  
+  return {
+    transactionId: paymentDetails.transactionId 
+      ? `${paymentDetails.transactionId.slice(-4).padStart(paymentDetails.transactionId.length, '*')}`
+      : undefined,
+    phoneNumber: paymentDetails.phoneNumber
+      ? `${paymentDetails.phoneNumber.slice(-4).padStart(paymentDetails.phoneNumber.length, '*')}`
+      : undefined,
+    reference: paymentDetails.reference,
+    status: paymentDetails.status,
+  };
+};
+
 export const create = mutation({
   args: {
     customerId: v.optional(v.id("customers")),
@@ -61,6 +77,8 @@ export const create = mutation({
     paidAmount: v.number(),
     dueAmount: v.number(),
     paymentMethod: v.string(),
+    // ✅ FIX #17: Track which coupon code was applied to the sale
+    couponCode: v.optional(v.string()),
     paymentDetails: v.optional(v.object({
       transactionId: v.optional(v.string()),
       phoneNumber: v.optional(v.string()),
@@ -113,6 +131,7 @@ export const create = mutation({
       throw new Error("No branch found. Please create a branch first.");
     }
     
+    // ✅ FIX #4: Store obfuscated payment details for security
     const saleId = await ctx.db.insert("sales", {
       saleNumber,
       branchId: defaultBranch._id,
@@ -127,7 +146,9 @@ export const create = mutation({
       paidAmount: args.paidAmount,
       dueAmount: args.dueAmount,
       paymentMethod: args.paymentMethod,
-      paymentDetails: args.paymentDetails,
+      // ✅ FIX #17: Store applied coupon code for audit trail
+      couponCode: args.couponCode,
+      paymentDetails: obfuscatePaymentData(args.paymentDetails), // Obfuscate sensitive data
       status,
       cashierId: userId,
       cashierName: user.name || user.email || "Unknown",

@@ -34,6 +34,10 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
   const startCamera = async () => {
     try {
       setError(null);
+      // Stop any existing stream before starting a new one
+      if (streamRef.current) {
+        CameraService.stopStream(streamRef.current);
+      }
       if (videoRef.current) {
         const stream = await CameraService.startStream(videoRef.current, currentFacingMode);
         streamRef.current = stream;
@@ -49,6 +53,8 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
   // ক্যামেরা থামান
   const stopCamera = () => {
     if (streamRef.current) {
+      // Stop all tracks to properly release camera
+      streamRef.current.getTracks().forEach(track => track.stop());
       CameraService.stopStream(streamRef.current);
       streamRef.current = null;
     }
@@ -108,8 +114,11 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     if (autoStart && !capturedPhoto) {
       startCamera();
     }
-    return () => stopCamera();
-  }, []);
+    return () => {
+      // Cleanup: Stop camera and release all resources when component unmounts
+      stopCamera();
+    };
+  }, [autoStart]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">

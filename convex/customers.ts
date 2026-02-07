@@ -3,9 +3,18 @@ import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
-  args: { searchTerm: v.optional(v.string()) },
+  args: { 
+    searchTerm: v.optional(v.string()),
+    // NEW: Pagination parameters for performance optimization
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     await getAuthUserId(ctx);
+    
+    // Default pagination: 20 items per page, max 100
+    const limit = Math.min(args.limit || 20, 100);
+    const offset = args.offset || 0;
     
     let customers = await ctx.db.query("customers").collect();
     
@@ -18,7 +27,24 @@ export const list = query({
       );
     }
     
-    return customers;
+    // Get total count BEFORE pagination
+    const totalCount = customers.length;
+    
+    // Apply pagination AFTER filtering
+    customers = customers.slice(offset, offset + limit);
+    
+    // Return paginated results with metadata
+    return {
+      items: customers,
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        hasMore: offset + limit < totalCount,
+        pageNumber: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(totalCount / limit),
+      }
+    };
   },
 });
 
@@ -49,17 +75,19 @@ export const create = mutation({
       throw new Error("Either email or phone number is required");
     }
     
-    // Validate email format if provided
+    // Normalize and validate email format if provided
+    let normalizedEmail: string | undefined = undefined;
     if (args.email?.trim()) {
+      normalizedEmail = args.email.trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(args.email.trim())) {
+      if (!emailRegex.test(normalizedEmail)) {
         throw new Error("Please enter a valid email address");
       }
       
-      // Check for duplicate email
+      // Check for duplicate email (normalized)
       const existingEmail = await ctx.db
         .query("customers")
-        .filter((q) => q.eq(q.field("email"), args.email!.trim()))
+        .filter((q) => q.eq(q.field("email"), normalizedEmail))
         .first();
       
       if (existingEmail) {
@@ -67,17 +95,20 @@ export const create = mutation({
       }
     }
     
-    // Validate phone format if provided
+    // Normalize and validate phone format if provided
+    let normalizedPhone: string | undefined = undefined;
     if (args.phone?.trim()) {
-      const phoneRegex = /^[\+]?[0-9\-\(\)\s]{10,20}$/;
-      if (!phoneRegex.test(args.phone.trim())) {
+      // Remove spaces, dashes, and parentheses for normalization
+      normalizedPhone = args.phone.trim().replace(/[\s\-()]/g, '');
+      const phoneRegex = /^[\+]?[0-9]{10,20}$/;
+      if (!phoneRegex.test(normalizedPhone)) {
         throw new Error("Please enter a valid phone number");
       }
       
-      // Check for duplicate phone
+      // Check for duplicate phone (normalized)
       const existingPhone = await ctx.db
         .query("customers")
-        .filter((q) => q.eq(q.field("phone"), args.phone!.trim()))
+        .filter((q) => q.eq(q.field("phone"), normalizedPhone))
         .first();
       
       if (existingPhone) {
@@ -87,8 +118,8 @@ export const create = mutation({
     
     const customerId = await ctx.db.insert("customers", {
       name: args.name.trim(),
-      email: args.email?.trim(),
-      phone: args.phone?.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
       address: args.address?.trim(),
       city: args.city?.trim(),
       preferredStyle: args.preferredStyle?.trim(),
@@ -135,6 +166,8 @@ export const update = mutation({
     preferredSize: v.optional(v.string()),
     preferredColors: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
+    lastDeliveryAddress: v.optional(v.string()),
+    lastDeliveryPhone: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -155,19 +188,21 @@ export const update = mutation({
       throw new Error("Either email or phone number is required");
     }
     
-    // Validate email format if provided
+    // Normalize and validate email format if provided
+    let normalizedEmail: string | undefined = undefined;
     if (args.email?.trim()) {
+      normalizedEmail = args.email.trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(args.email.trim())) {
+      if (!emailRegex.test(normalizedEmail)) {
         throw new Error("Please enter a valid email address");
       }
       
-      // Check for duplicate email (excluding current customer)
-      if (args.email.trim() !== existingCustomer.email) {
+      // Check for duplicate email (excluding current customer, normalized comparison)
+      if (normalizedEmail !== existingCustomer.email?.toLowerCase()) {
         const duplicateEmail = await ctx.db
           .query("customers")
           .filter((q) => q.and(
-            q.eq(q.field("email"), args.email!.trim()),
+            q.eq(q.field("email"), normalizedEmail),
             q.neq(q.field("_id"), args.id)
           ))
           .first();
@@ -178,19 +213,22 @@ export const update = mutation({
       }
     }
     
-    // Validate phone format if provided
+    // Normalize and validate phone format if provided
+    let normalizedPhone: string | undefined = undefined;
     if (args.phone?.trim()) {
-      const phoneRegex = /^[\+]?[0-9\-\(\)\s]{10,20}$/;
-      if (!phoneRegex.test(args.phone.trim())) {
+      // Remove spaces, dashes, and parentheses for normalization
+      normalizedPhone = args.phone.trim().replace(/[\s\-()]/g, '');
+      const phoneRegex = /^[\+]?[0-9]{10,20}$/;
+      if (!phoneRegex.test(normalizedPhone)) {
         throw new Error("Please enter a valid phone number");
       }
       
-      // Check for duplicate phone (excluding current customer)
-      if (args.phone.trim() !== existingCustomer.phone) {
+      // Check for duplicate phone (excluding current customer, normalized comparison)
+      if (normalizedPhone !== existingCustomer.phone?.replace(/[\s\-()]/g, '')) {
         const duplicatePhone = await ctx.db
           .query("customers")
           .filter((q) => q.and(
-            q.eq(q.field("phone"), args.phone!.trim()),
+            q.eq(q.field("phone"), normalizedPhone),
             q.neq(q.field("_id"), args.id)
           ))
           .first();
@@ -204,14 +242,16 @@ export const update = mutation({
     const { id, ...updates } = args;
     await ctx.db.patch(id, {
       name: updates.name.trim(),
-      email: updates.email?.trim(),
-      phone: updates.phone?.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
       address: updates.address?.trim(),
       city: updates.city?.trim(),
       preferredStyle: updates.preferredStyle?.trim(),
       preferredSize: updates.preferredSize?.trim(),
       preferredColors: updates.preferredColors || [],
       notes: updates.notes?.trim(),
+      lastDeliveryAddress: updates.lastDeliveryAddress?.trim(),
+      lastDeliveryPhone: updates.lastDeliveryPhone?.trim(),
     });
     return id;
   },

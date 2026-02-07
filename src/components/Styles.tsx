@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { toast } from "sonner";
 
 interface Product {
   _id: string;
@@ -35,9 +36,11 @@ export default function Styles() {
   const [sortBy, setSortBy] = useState<"styleNumber" | "fabric" | "price" | "productCount">("styleNumber");
   const [expandedStyle, setExpandedStyle] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<StyleGroup | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch all styles
   const styles = useQuery(api.styles.list, {});
+  const deleteAllStyles = useMutation(api.styles.deleteAll);
   
   // Get products for expanded style
   const expandedStyleData = useQuery(
@@ -45,8 +48,11 @@ export default function Styles() {
     expandedStyle ? { styleId: expandedStyle as any } : "skip"
   ) as StyleWithProducts | null;
 
-  // Filter styles
+  // Filter styles - only show styles with actual active products
   const filteredStyles = (styles || []).filter((style: StyleGroup) => {
+    // Only include styles that have products counted
+    if (style.productCount <= 0) return false;
+
     const matchesSearch =
       style.styleNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (style.categoryName?.toLowerCase() || "").includes(searchTerm.toLowerCase());
@@ -77,6 +83,42 @@ export default function Styles() {
     new Set((styles || []).map((s: StyleGroup) => s.fabric))
   ).sort();
 
+  // Handle delete all styles
+  const handleDeleteAllStyles = async () => {
+    const confirmed = window.confirm(
+      "⚠️ সব স্টাইল ডিলিট করতে চান?\n\n" +
+      "এই অ্যাকশনটি বাতিল করা যাবে না। সমস্ত স্টাইল গ্রুপ স্থায়ীভাবে সরানো হবে।"
+    );
+    
+    if (!confirmed) {
+      toast.info("রিসেট বাতিল করা হয়েছে");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteAllStyles({});
+      toast.success(result.message || `✅ ${result.deletedCount} টি স্টাইল ডিলিট করা হয়েছে`);
+    } catch (error: any) {
+      console.error("Error deleting styles:", error);
+      toast.error(`❌ ডিলিট ব্যর্থ: ${error?.message || "আবার চেষ্টা করুন"}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Check if still loading (styles is undefined while query is in flight)
+  if (styles === undefined) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="text-sm text-gray-600 mt-2">লোড করছে...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -84,6 +126,22 @@ export default function Styles() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">স্টাইল ম্যানেজমেন্ট</h1>
           <p className="text-gray-600">একই বৈশিষ্ট্যের পণ্যগুলি দেখুন এবং পরিচালনা করুন</p>
+          {styles && styles.length > 0 && (
+            <button
+              onClick={handleDeleteAllStyles}
+              disabled={isDeleting}
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? (
+                <>
+                  <span className="inline-block animate-spin mr-2">⏳</span>
+                  রিসেট করছে...
+                </>
+              ) : (
+                "🗑️ সব স্টাইল রিসেট করুন"
+              )}
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -225,33 +283,41 @@ export default function Styles() {
                 {expandedStyle === style._id && expandedStyleData && (
                   <div className="border-t border-gray-200 bg-gray-50 p-4">
                     <h4 className="font-semibold text-gray-900 mb-3">এই স্টাইলের পণ্যগুলি:</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {(expandedStyleData.products as Product[] || []).map((product: Product) => (
-                        <div key={product._id} className="bg-white rounded-lg p-3 border border-gray-200">
-                          {product.pictureUrl && (
-                            <img
-                              src={product.pictureUrl}
-                              alt={product.name}
-                              className="w-full h-24 object-cover rounded mb-2"
-                            />
-                          )}
-                          <p className="font-medium text-sm text-gray-900 truncate">
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-gray-600">{product.color}</p>
-                          <div className="mt-2 flex justify-between items-center text-sm">
-                            <span className="font-semibold text-purple-600">৳{product.sellingPrice}</span>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              product.currentStock > 0
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }`}>
-                              {product.currentStock} স্টক
-                            </span>
+                    {expandedStyleData.products && expandedStyleData.products.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {(expandedStyleData.products as Product[] || []).map((product: Product) => (
+                          <div key={product._id} className="bg-white rounded-lg p-3 border border-gray-200">
+                            {product.pictureUrl && (
+                              <img
+                                src={product.pictureUrl}
+                                alt={product.name}
+                                className="w-full h-24 object-cover rounded mb-2"
+                              />
+                            )}
+                            <p className="font-medium text-sm text-gray-900 truncate">
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-gray-600">{product.color}</p>
+                            <div className="mt-2 flex justify-between items-center text-sm">
+                              <span className="font-semibold text-purple-600">৳{product.sellingPrice}</span>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                product.currentStock > 0
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}>
+                                {product.currentStock} স্টক
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-sm text-yellow-800">
+                          ⚠️ এই স্টাইলে কোনো সক্রিয় পণ্য নেই। ইনভেন্টরিতে পণ্য যোগ করুন।
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

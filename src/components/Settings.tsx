@@ -267,8 +267,14 @@ export default function Settings() {
       const text = await file.text();
       const importData = JSON.parse(text);
 
-      if (!importData.store || importData.store !== "DUBAI BORKA HOUSE") {
-        throw new Error("Invalid backup file format");
+      // Validate backup file - support both old and new formats
+      if (!importData.dataCollections && !importData.products && !importData.sales && !importData.customers) {
+        throw new Error("অবৈধ ব্যাকআপ ফাইল ফরম্যাট। সঠিক ব্যাকআপ ফাইল ব্যবহার করুন।");
+      }
+
+      // Check if it's a DUBAI BORKA HOUSE backup (optional - support legacy formats)
+      if (importData.store && importData.store !== "DUBAI BORKA HOUSE") {
+        throw new Error("এটি DUBAI BORKA HOUSE এর জন্য তৈরি ব্যাকআপ ফাইল নয়।");
       }
 
       // Show preview instead of using confirm dialog
@@ -276,7 +282,7 @@ export default function Settings() {
       
       // Calculate statistics
       const stats: any = {
-        timestamp: new Date(importData.timestamp).toLocaleString('bn-BD'),
+        timestamp: importData.timestamp ? new Date(importData.timestamp).toLocaleString('bn-BD') : new Date().toLocaleString('bn-BD'),
         version: importData.version || "Unknown",
         collections: [],
         totalRecords: 0
@@ -294,9 +300,10 @@ export default function Settings() {
       
       setImportPreviewData({ ...importData, stats });
       setShowImportPreview(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Import error:", error);
-      toast.error("ব্যাকআপ ফাইল পড়তে ব্যর্থ। ফাইলের ফরম্যাট চেক করুন।");
+      const errorMsg = error?.message || "ব্যাকআপ ফাইল পড়তে ব্যর্থ। ফাইলের ফরম্যাট চেক করুন।";
+      toast.error(`❌ ${errorMsg}`);
     } finally {
       event.target.value = '';
     }
@@ -324,12 +331,18 @@ export default function Settings() {
       }
 
       await importDataMutation({ data: { ...importPreviewData, dataCollections } });
-      toast.success("ডেটা সফলভাবে পুনরুদ্ধার করা হয়েছে!");
+      toast.success("✅ ডেটা সফলভাবে পুনরুদ্ধার করা হয়েছে!\nপেজ রিলোড হচ্ছে...");
       setShowImportPreview(false);
       setImportPreviewData(null);
-    } catch (error) {
+      
+      // Reload page after successful import
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: any) {
       console.error("Import error:", error);
-      toast.error("ডেটা পুনরুদ্ধার ব্যর্থ হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।");
+      const errorMsg = error?.message || "ডেটা পুনরুদ্ধার ব্যর্থ হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।";
+      toast.error(`❌ ${errorMsg}`);
     } finally {
       setIsImporting(false);
     }
@@ -369,20 +382,21 @@ export default function Settings() {
   };
 
   const resetApplication = async () => {
-    if (!confirm("⚠️ This will delete ALL data permanently and reset to default configuration. Are you sure?")) {
+    if (!window.confirm("⚠️ সকল ডেটা স্থায়ীভাবে মুছে ফেলা হবে এবং ডিফল্ট কনফিগারেশনে রিসেট হবে। কি আপনি নিশ্চিত?")) {
+      toast.info("রিসেট বাতিল করা হয়েছে");
       return;
     }
     
-    const confirmText = prompt("Type 'RESET' to confirm this action:");
+    const confirmText = window.prompt("নিচে 'RESET' টাইপ করুন এই অ্যাকশন নিশ্চিত করতে:\n\n⚠️ এটি বাতিল করা যায় না!");
     if (confirmText !== 'RESET') {
-      toast.error("Reset cancelled - confirmation text did not match");
+      toast.error("❌ রিসেট বাতিল করা হয়েছে - নিশ্চিতকরণ টেক্সট মিলেনি");
       return;
     }
 
     setIsResetting(true);
     try {
       await resetDataMutation({});
-      toast.success("Application reset to default state successfully!");
+      toast.success("✅ অ্যাপ্লিকেশন সফলভাবে ডিফল্ট স্টেটে রিসেট হয়েছে!\nপেজ রিলোড হচ্ছে...");
       
       // Clear browser cache and localStorage as well
       if ('caches' in window) {
@@ -393,14 +407,16 @@ export default function Settings() {
         });
       }
       localStorage.clear();
+      sessionStorage.clear();
       
       // Reload the page to reflect changes
       setTimeout(() => {
         window.location.reload();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Reset error:", error);
-      toast.error("Failed to reset application");
+      const errorMsg = error?.message || "অ্যাপ্লিকেশন রিসেট করতে ব্যর্থ";
+      toast.error(`❌ ${errorMsg}`);
     } finally {
       setIsResetting(false);
     }
@@ -1331,8 +1347,8 @@ export default function Settings() {
               {/* Reset Application Card */}
               <div className="border border-red-200 rounded-lg p-3 sm:p-4 md:p-6 bg-red-50 hover:shadow-md transition-shadow">
                 <div className="mb-4">
-                  <h4 className="font-semibold text-red-900 text-sm sm:text-base">🔄 Reset to Default</h4>
-                  <p className="text-xs sm:text-sm text-red-700 mt-2 line-clamp-2">⚠️ Permanently delete all data and restore defaults</p>
+                  <h4 className="font-semibold text-red-900 text-sm sm:text-base">🔄 ডিফল্টে রিসেট করুন</h4>
+                  <p className="text-xs sm:text-sm text-red-700 mt-2 line-clamp-2">⚠️ সব ডেটা স্থায়ীভাবে মুছে ফেলুন এবং ডিফল্ট সেটিংস পুনরুদ্ধার করুন</p>
                 </div>
                 <button
                   onClick={resetApplication}
@@ -1342,10 +1358,10 @@ export default function Settings() {
                   {isResetting ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white"></div>
-                      <span>Resetting...</span>
+                      <span>রিসেট করছে...</span>
                     </div>
                   ) : (
-                    "Reset Application"
+                    "🗑️ রিসেট করুন"
                   )}
                 </button>
               </div>

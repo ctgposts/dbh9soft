@@ -46,6 +46,19 @@ export default function EmployeeManagement() {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // ✅ FIX #16: Validate permissions before submission
+      const invalidPermissions = formData.permissions.filter(p => !permissionsList.includes(p));
+      if (invalidPermissions.length > 0) {
+        toast.error(`Invalid permissions: ${invalidPermissions.join(", ")}`);
+        return;
+      }
+      
+      // Validate that at least basic required fields are filled
+      if (!formData.name.trim() || !formData.phone.trim() || !formData.employeeId.trim()) {
+        toast.error("Please fill in all required fields");
+        return;
+      }
+
       if (showEditModal && selectedEmployee) {
         const employee = employees?.find(e => e._id === selectedEmployee);
         await updateEmployee({
@@ -62,7 +75,7 @@ export default function EmployeeManagement() {
     } catch (error: any) {
       toast.error(error.message || "Failed to save employee");
     }
-  }, [showEditModal, selectedEmployee, employees, formData, updateEmployee, createEmployee]);
+  }, [showEditModal, selectedEmployee, employees, formData, updateEmployee, createEmployee, permissionsList]);
 
   const handleEdit = useCallback((employeeId: Id<"employees">) => {
     const employee = employees?.find(e => e._id === employeeId);

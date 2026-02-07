@@ -15,6 +15,10 @@ export default function WhatsAppOrders() {
   });
   const branches = useQuery(api.branches.list, {});
   const employees = useQuery(api.employees.list, {});
+  // ✅ FIX #19: Query products to verify stock before conversion
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, {});
+  const products = productsResponse?.items || [];
 
   const updateStatus = useMutation(api.whatsappOrders.updateStatus);
   const convertToSale = useMutation(api.whatsappOrders.convertToSale);
@@ -59,6 +63,25 @@ export default function WhatsAppOrders() {
       try {
         const order = orders?.find(o => o._id === orderId);
         if (!order) return;
+
+        // ✅ FIX #19: Verify stock before converting to sale
+        if (!products) {
+          toast.error("Unable to verify stock. Please try again.");
+          return;
+        }
+
+        const insufficientStockItems = order.items.filter(item => {
+          const product = products.find(p => p._id === item.productId);
+          return !product || product.currentStock < item.quantity;
+        });
+
+        if (insufficientStockItems.length > 0) {
+          const itemNames = insufficientStockItems
+            .map(item => `${item.productName} (needed: ${item.quantity})`)
+            .join(", ");
+          toast.error(`Insufficient stock for: ${itemNames}`);
+          return;
+        }
 
         await convertToSale({
           orderId,

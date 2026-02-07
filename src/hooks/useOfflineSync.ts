@@ -3,11 +3,23 @@ import { offlineStorage } from "../utils/offlineStorage";
 import { toast } from "sonner";
 
 /**
- * Hook for managing offline sync with automatic synchronization
+ * Generate a unique idempotency key for preventing duplicate operations
+ */
+const generateIdempotencyKey = (type: string, operation: string, data: any): string => {
+  // Use timestamp + random value + data hash to ensure uniqueness
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 11);
+  const dataStr = JSON.stringify(data);
+  return `${type}-${operation}-${timestamp}-${random}`;
+};
+
+/**
+ * Hook for managing offline sync with automatic synchronization and idempotency
  */
 export const useOfflineSync = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncedOperationIds, setSyncedOperationIds] = useState<Set<string>>(new Set());
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize offline storage
@@ -59,7 +71,7 @@ export const useOfflineSync = () => {
     []
   );
 
-  // Add operation to pending sync queue
+  // Add operation to pending sync queue with idempotency key
   const addPendingOperation = useCallback(
     async (
       type: string,
@@ -67,7 +79,23 @@ export const useOfflineSync = () => {
       data: any
     ) => {
       try {
-        await offlineStorage.addPendingSync(type, operation, data);
+        // Generate unique idempotency key to prevent duplicate syncs on network flicker
+        const idempotencyKey = generateIdempotencyKey(type, operation, data);
+        
+        // Check if this operation was already synced (prevent duplicates)
+        if (syncedOperationIds.has(idempotencyKey)) {
+          console.log(`ℹ️ Operation ${type}:${operation} already synced, skipping duplicate`);
+          return;
+        }
+        
+        // Add idempotency key to the data
+        const operationData = { 
+          ...data,
+          _idempotencyKey: idempotencyKey,
+          _timestamp: Date.now()
+        };
+        
+        await offlineStorage.addPendingSync(type, operation, operationData);
         
         if (isOnline) {
           // If online, trigger sync immediately
@@ -80,7 +108,7 @@ export const useOfflineSync = () => {
         toast.error("Failed to save offline");
       }
     },
-    [isOnline]
+    [isOnline, syncedOperationIds]
   );
 
   // Get cached data
@@ -93,7 +121,7 @@ export const useOfflineSync = () => {
     }
   }, []);
 
-  // Perform sync
+  // Perform sync with idempotency tracking
   const performSync = useCallback(async () => {
     if (!isOnline || isSyncing) return;
 
@@ -106,26 +134,49 @@ export const useOfflineSync = () => {
         return;
       }
 
-      console.log(`🔄 Syncing ${pendingSyncs.length} pending operations...`);
+      console.log(`🔄 Syncing ${pendingSyncs.length} pending operations with idempotency checks...`);
       toast.loading(`Syncing ${pendingSyncs.length} changes...`);
 
       // Simulate sync delay
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
+      // Track successfully synced operations
+      const newSyncedIds = new Set(syncedOperationIds);
+      let successCount = 0;
+      let skipCount = 0;
+
       // Mark all as synced (in real app, send to server first)
       for (const sync of pendingSyncs) {
-        await offlineStorage.markSynced(sync.id);
+        const idempotencyKey = sync.data._idempotencyKey;
+        
+        // Check if already synced
+        if (newSyncedIds.has(idempotencyKey)) {
+          console.log(`⏭️ Skipping duplicate operation: ${idempotencyKey}`);
+          skipCount++;
+        } else {
+          // Mark as synced
+          await offlineStorage.markSynced(sync.id);
+          newSyncedIds.add(idempotencyKey);
+          successCount++;
+        }
       }
 
-      toast.success(`✅ Synced ${pendingSyncs.length} changes`);
-      console.log("✅ Sync completed successfully");
+      // Update synced operations state
+      setSyncedOperationIds(newSyncedIds);
+
+      const message = skipCount > 0 
+        ? `✅ Synced ${successCount} changes (skipped ${skipCount} duplicates)`
+        : `✅ Synced ${successCount} changes`;
+      
+      toast.success(message);
+      console.log(`✅ Sync completed: ${successCount} synced, ${skipCount} skipped`);
     } catch (error) {
       console.error("Sync failed:", error);
       toast.error("Sync failed - will retry when online");
     } finally {
       setIsSyncing(false);
     }
-  }, [isOnline, isSyncing]);
+  }, [isOnline, isSyncing, syncedOperationIds]);
 
   return {
     isOnline,

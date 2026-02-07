@@ -47,10 +47,12 @@ export default function EnhancedPOS() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [activeTab, setActiveTab] = useState("products"); // For mobile tabs
 
-  const products = useQuery(api.products.list, { 
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, { 
     categoryId: selectedCategory,
     searchTerm: searchTerm || undefined 
   });
+  const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list);
   const createSale = useMutation(api.sales.create);
   const getSale = useQuery(api.sales.get, 
@@ -140,6 +142,48 @@ export default function EnhancedPOS() {
     setSelectedCustomerId(customer._id);
   };
 
+  // ✅ FIX #20: Calculate delivery charges based on delivery type and zone
+  const calculateDeliveryCharges = (type: string, address?: string): number => {
+    if (type !== "delivery") return 0;
+    
+    // Default delivery charge for standard delivery (can be extended with zone-based logic)
+    // These are example rates
+    const defaultDeliveryCharge = 50; // ৳50 flat rate
+    
+    // Future enhancement: Zone-based calculation
+    // if (address) {
+    //   const zone = determineZone(address); // Would implement zone matching
+    //   const zoneRates: Record<string, number> = {
+    //     "dhaka": 50,
+    //     "outside_dhaka": 100,
+    //   };
+    //   return zoneRates[zone] || defaultDeliveryCharge;
+    // }
+    
+    return defaultDeliveryCharge;
+  };
+
+  // ✅ FIX #20: Handle delivery type change and auto-calculate charges
+  const handleDeliveryTypeChange = (type: string) => {
+    setDeliveryType(type);
+    
+    if (type === "pickup") {
+      // Pickup: no delivery charges
+      setDeliveryInfo({
+        address: "",
+        phone: "",
+        charges: 0,
+      });
+    } else if (type === "delivery") {
+      // Delivery: calculate default charges
+      const calculatedCharges = calculateDeliveryCharges("delivery", deliveryInfo.address);
+      setDeliveryInfo(prev => ({
+        ...prev,
+        charges: calculatedCharges,
+      }));
+    }
+  };
+
   const addToCart = (product: any) => {
     // Stock validation
     if (product.currentStock <= 0) {
@@ -201,6 +245,23 @@ export default function EnhancedPOS() {
     setCart(cart.filter(item => item.cartId !== cartId));
   };
 
+  // ✅ FIX #1: Handle customer selection with delivery info auto-fill
+  const handleCustomerSelect = (customer: any) => {
+    setSelectedCustomerId(customer._id);
+    setCustomerInfo({
+      name: customer.name,
+      phone: customer.phone || "",
+    });
+    // Auto-fill delivery info from last order
+    if (customer.lastDeliveryAddress) {
+      setDeliveryInfo(prev => ({
+        ...prev,
+        address: customer.lastDeliveryAddress,
+        phone: customer.lastDeliveryPhone || prev.phone,
+      }));
+    }
+  };
+
   const clearCart = () => {
     setCart([]);
     setCustomerInfo({ name: "", phone: "" });
@@ -222,9 +283,32 @@ export default function EnhancedPOS() {
   
   const total = subtotal + tax + deliveryCharges - discountAmount;
 
+  // ✅ FIX #2: Validate stock before checkout
+  const validateStockBeforeCheckout = (): boolean => {
+    for (const cartItem of cart) {
+      const product = products?.find(p => p._id === cartItem.productId);
+      if (!product) {
+        toast.error(`Product ${cartItem.name} not found`);
+        return false;
+      }
+      if (product.currentStock < cartItem.quantity) {
+        toast.error(
+          `Insufficient stock for ${cartItem.name}. Available: ${product.currentStock}, Required: ${cartItem.quantity}`
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("Cart is empty");
+      return;
+    }
+
+    // ✅ FIX #2: Validate stock before proceeding
+    if (!validateStockBeforeCheckout()) {
       return;
     }
 
@@ -724,7 +808,7 @@ function CheckoutSection({
           <h4 className="font-medium text-gray-900 mb-2 text-sm">Delivery</h4>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setDeliveryType("pickup")}
+              onClick={() => handleDeliveryTypeChange("pickup")}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 deliveryType === "pickup"
                   ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
@@ -734,7 +818,7 @@ function CheckoutSection({
               Pickup
             </button>
             <button
-              onClick={() => setDeliveryType("delivery")}
+              onClick={() => handleDeliveryTypeChange("delivery")}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 deliveryType === "delivery"
                   ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"

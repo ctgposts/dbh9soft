@@ -130,6 +130,8 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
         setQrCodeDataUrl(url);
       }).catch((err: Error) => {
         console.error('QR Code generation error:', err);
+        toast.error('Failed to generate QR code. Print without QR code.');
+        setQrCodeDataUrl(''); // Clear any previous QR code
       });
     }
   }, [printSettings.includeQR, sale, shopSettings]);
@@ -153,6 +155,9 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
         setBarcodeDataUrl(dataUrl);
       } catch (err) {
         console.error('Barcode generation error:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        toast.error(`Failed to generate barcode: ${errorMsg}. Print without barcode.`);
+        setBarcodeDataUrl(''); // Clear any previous barcode
       }
     }
   }, [printSettings.includeBarcode, sale.saleNumber]);

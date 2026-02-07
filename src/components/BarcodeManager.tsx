@@ -135,9 +135,11 @@ export default function BarcodeManager() {
     localStorage.setItem("printSettings", JSON.stringify(printSettings));
   }, [printSettings]);
 
-  const products = useQuery(api.products.list, { 
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, { 
     categoryId: selectedCategory
   });
+  const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list);
 
   // Memoized filtered products for performance

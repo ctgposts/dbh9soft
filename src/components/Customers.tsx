@@ -44,9 +44,11 @@ export default function Customers() {
     notes: "",
   });
 
-  const customers = useQuery(api.customers.list, { 
+  // ✅ FIX: Extract items array from paginated customers query response
+  const customersResponse = useQuery(api.customers.list, { 
     searchTerm: searchTerm || undefined 
   });
+  const customers = customersResponse?.items || [];
   
   const createCustomer = useMutation(api.customers.create);
   const updateCustomer = useMutation(api.customers.update);
@@ -59,7 +61,7 @@ export default function Customers() {
 
   // Debounce search to reduce API calls
   useEffect(() => {
-    if (customers && searchTerm) {
+    if (customers && customers.length > 0 && searchTerm) {
       // Only show notification on successful search
       const timer = setTimeout(() => {
         toast.success(`👥 Found ${customers.length} customer(s)`, { duration: 1500 });
@@ -82,13 +84,14 @@ export default function Customers() {
       case 'email':
         if (value && value.trim()) {
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(value.trim())) {
+          const normalizedEmail = value.trim().toLowerCase();
+          if (!emailRegex.test(normalizedEmail)) {
             return "Please enter a valid email address";
           }
-          // Check for duplicate email (excluding current customer when editing)
-          if (customers) {
+          // ✅ FIX: Check for duplicate email with proper array handling
+          if (customers && customers.length > 0) {
             const duplicate = customers.find(cust => 
-              cust.email?.toLowerCase() === value.trim().toLowerCase() && 
+              cust.email?.toLowerCase() === normalizedEmail && 
               (!editingCustomer || cust._id !== editingCustomer._id)
             );
             if (duplicate) {
@@ -103,10 +106,11 @@ export default function Customers() {
           if (!phoneRegex.test(value.trim())) {
             return "Please enter a valid phone number (10-20 digits)";
           }
-          // Check for duplicate phone (excluding current customer when editing)
-          if (customers) {
+          // ✅ FIX: Check for duplicate phone with proper array handling
+          const normalizedPhone = value.trim().replace(/[\s\-()]/g, '');
+          if (customers && customers.length > 0) {
             const duplicate = customers.find(cust => 
-              cust.phone === value.trim() && 
+              cust.phone?.replace(/[\s\-()]/g, '') === normalizedPhone && 
               (!editingCustomer || cust._id !== editingCustomer._id)
             );
             if (duplicate) {
@@ -345,7 +349,7 @@ export default function Customers() {
 
   // Memoized filter and sort to prevent unnecessary recalculations
   const filteredCustomers = useMemo(() => {
-    if (!customers) return [];
+    if (!customers || customers.length === 0) return [];
     
     return customers
       .filter(customer => {
@@ -372,7 +376,8 @@ export default function Customers() {
       });
   }, [customers, filterBy, sortBy]);
 
-  if (!customers) {
+  // Check if still loading (customersResponse is undefined while query is in flight)
+  if (customersResponse === undefined) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -466,13 +471,13 @@ export default function Customers() {
         </div>
         <div className="bg-white rounded-lg shadow border border-gray-200 p-3 sm:p-4 hover:shadow-md transition-shadow">
           <div className="text-lg sm:text-2xl font-bold text-blue-600">
-            {customers.filter(c => c.lastPurchaseDate && Date.now() - c.lastPurchaseDate < 30 * 24 * 60 * 60 * 1000).length}
+            {customers?.filter(c => c.lastPurchaseDate && Date.now() - c.lastPurchaseDate < 30 * 24 * 60 * 60 * 1000).length || 0}
           </div>
           <div className="text-xs sm:text-sm text-gray-600">Recent Buyers</div>
         </div>
         <div className="bg-white rounded-lg shadow border border-gray-200 p-3 sm:p-4 hover:shadow-md transition-shadow">
           <div className="text-lg sm:text-2xl font-bold text-purple-600">
-            {Math.round(customers.reduce((sum, c) => sum + c.totalPurchases, 0) / customers.length) || 0}
+            {customers && customers.length > 0 ? Math.round(customers.reduce((sum, c) => sum + c.totalPurchases, 0) / customers.length) : 0}
           </div>
           <div className="text-xs sm:text-sm text-gray-600">Avg Purchases</div>
         </div>

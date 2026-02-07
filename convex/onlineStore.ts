@@ -83,6 +83,16 @@ export const updateOnlineProduct = mutation({
       .withIndex("by_product", (q) => q.eq("productId", productId))
       .first();
 
+    // ✅ FIX #18: Sync online price to inventory product if onlinePrice is changed
+    if (args.onlinePrice && args.onlinePrice > 0) {
+      const product = await ctx.db.get(productId);
+      if (product) {
+        await ctx.db.patch(productId, {
+          sellingPrice: args.onlinePrice,
+        });
+      }
+    }
+
     if (existingOnlineProduct) {
       await ctx.db.patch(existingOnlineProduct._id, updateData);
       return existingOnlineProduct._id;

@@ -9,7 +9,9 @@ export default function Reports() {
   });
 
   const sales = useQuery(api.sales.list, {}) || [];
-  const products = useQuery(api.products.list, {}) || [];
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, {});
+  const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list) || [];
   const customers = useQuery(api.customers.list, {}) || [];
 

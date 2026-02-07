@@ -12,6 +12,7 @@ const BACKUP_COLLECTIONS = [
   "onlineOrders",
   "categories",
   "products",
+  "styles",
   "sales",
   "customers",
   "stockMovements",
@@ -34,7 +35,6 @@ const BACKUP_COLLECTIONS = [
   "advancedCoupons",
   "couponRedemptions",
   "referralProgram",
-  "settings",
   "suppliers"
 ] as const;
 
@@ -184,8 +184,9 @@ export const resetAllData = mutation({
 
     return { 
       success: true, 
-      message: "Application reset to default state successfully",
-      collectionsReset: BACKUP_COLLECTIONS.length
+      message: "✅ Application reset to default state successfully",
+      collectionsReset: BACKUP_COLLECTIONS.length,
+      defaultCategoriesCreated: 3
     };
   },
 });

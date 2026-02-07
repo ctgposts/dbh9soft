@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
@@ -126,6 +126,27 @@ export const getStyleWithProducts = query({
     return {
       ...style,
       products: products.filter((p) => p !== null),
+    };
+  },
+});
+/**
+ * 🗑️ Delete all styles from database (Reset styles)
+ */
+export const deleteAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await getAuthUserId(ctx);
+    
+    const styles = await ctx.db.query("styles").collect();
+    
+    for (const style of styles) {
+      await ctx.db.delete(style._id);
+    }
+    
+    return {
+      success: true,
+      deletedCount: styles.length,
+      message: `✅ ${styles.length} টি স্টাইল ডিলিট করা হয়েছে।`,
     };
   },
 });

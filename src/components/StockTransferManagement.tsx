@@ -54,7 +54,9 @@ export default function StockTransferManagement() {
   const [selectedTransfer, setSelectedTransfer] = useState<StockTransfer | null>(null);
 
   const branches = useQuery(api.branches.list, {}) || [];
-  const products = useQuery(api.products.list, {}) || [];
+  // ✅ FIX: Extract items array from paginated products query response
+  const productsResponse = useQuery(api.products.list, {});
+  const products = productsResponse?.items || [];
   const transfers = useQuery(api.stockTransfer.list, {}) || [];
   const pendingTransfers = useQuery(api.stockTransfer.list, { status: "pending" }) || [];
   const transferStats = (useQuery(api.stockTransfer.getStatistics, {}) as TransferStats | null) || {

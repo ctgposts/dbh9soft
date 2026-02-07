@@ -96,9 +96,16 @@ export const list = query({
     fabric: v.optional(v.string()),
     color: v.optional(v.string()),
     occasion: v.optional(v.string()),
+    // NEW: Pagination parameters for performance optimization
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await getAuthUserId(ctx);
+    
+    // Default pagination: 20 items per page, max 100
+    const limit = Math.min(args.limit || 20, 100);
+    const offset = args.offset || 0;
     
     let products;
     
@@ -174,7 +181,27 @@ export const list = query({
       );
     }
     
-    return products.filter(product => product.isActive);
+    // Filter active products
+    products = products.filter(product => product.isActive);
+    
+    // Get total count BEFORE pagination for metadata
+    const totalCount = products.length;
+    
+    // Apply pagination AFTER all filtering
+    products = products.slice(offset, offset + limit);
+    
+    // Return paginated results with metadata for better performance and UX
+    return {
+      items: products,
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        hasMore: offset + limit < totalCount,
+        pageNumber: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(totalCount / limit),
+      }
+    };
   },
 });
 
