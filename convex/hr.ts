@@ -218,6 +218,21 @@ export const createEmployee = mutation({
       }
     }
 
+    // Log the activity
+    try {
+      await ctx.db.insert("userActivityLog", {
+        userId: id,
+        userName: `${args.firstName} ${args.lastName}`,
+        action: "created",
+        actionType: "hrEmployee",
+        details: `নতুন কর্মচারী সৃষ্টি: ${args.firstName} ${args.lastName} (${args.employeeId})`,
+        status: "success",
+        timestamp: Date.now(),
+      });
+    } catch (e) {
+      console.log("Could not log activity:", e);
+    }
+
     return id;
   },
 });
@@ -720,6 +735,21 @@ export const generatePayroll = mutation({
       );
     }
 
+    // Log the activity
+    try {
+      await ctx.db.insert("userActivityLog", {
+        userId: "system",
+        userName: "System",
+        action: "generated",
+        actionType: "payroll",
+        details: `মাসিক বেতন তালিকা তৈরি: ${args.payrollMonthName} (${createdPayrolls.length} কর্মচারী)`,
+        status: "success",
+        timestamp: Date.now(),
+      });
+    } catch (e) {
+      console.log("Could not log activity:", e);
+    }
+
     return createdPayrolls;
   },
 });
@@ -727,16 +757,36 @@ export const generatePayroll = mutation({
 export const approvePayroll = mutation({
   args: {
     payrollId: v.id("hrPayroll"),
-    approvedBy: v.id("users"),
-    approvedByName: v.string(),
+    approvedBy: v.optional(v.id("users")),
+    approvedByName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.payrollId, {
+    const updates: any = {
       status: "approved",
-      approvedBy: args.approvedBy,
-      approvedByName: args.approvedByName,
       approvalDate: Date.now(),
-    });
+    };
+    
+    if (args.approvedBy) updates.approvedBy = args.approvedBy;
+    if (args.approvedByName) updates.approvedByName = args.approvedByName;
+    else updates.approvedByName = "System";
+    
+    await ctx.db.patch(args.payrollId, updates);
+    
+    // Log the activity
+    try {
+      await ctx.db.insert("userActivityLog", {
+        userId: args.approvedBy || "system",
+        userName: args.approvedByName || "System",
+        action: "approved",
+        actionType: "payroll",
+        details: `বেতন অনুমোদিত: ${args.payrollId}`,
+        status: "success",
+        timestamp: Date.now(),
+      });
+    } catch (e) {
+      console.log("Could not log activity:", e);
+    }
+    
     return args.payrollId;
   },
 });

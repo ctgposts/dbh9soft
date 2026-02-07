@@ -193,11 +193,16 @@ export default function HRPayroll() {
   const performances = useQuery(api.hr.getPerformanceReviews, {});
   
   // Attendance query with date range
-  const attendanceQuery = useQuery(api.hr.getEmployeeAttendance, {
-    employeeId: selectedEmployee?._id || ("" as Id<"hrEmployees">),
-    fromDate: selectedAttendanceDateRange.fromDate ? new Date(selectedAttendanceDateRange.fromDate).getTime() : 0,
-    toDate: selectedAttendanceDateRange.toDate ? new Date(selectedAttendanceDateRange.toDate).getTime() : Date.now(),
-  });
+  const attendanceQuery = useQuery(
+    api.hr.getEmployeeAttendance,
+    selectedEmployee?._id
+      ? {
+          employeeId: selectedEmployee._id,
+          fromDate: selectedAttendanceDateRange.fromDate ? new Date(selectedAttendanceDateRange.fromDate).getTime() : 0,
+          toDate: selectedAttendanceDateRange.toDate ? new Date(selectedAttendanceDateRange.toDate).getTime() : Date.now(),
+        }
+      : "skip"
+  ) as any;
 
   // UseEffect to populate attendance records when query updates
   useEffect(() => {
@@ -303,6 +308,12 @@ export default function HRPayroll() {
         (e) => e._id === attendanceData.employeeId
       );
 
+      // Validate required fields
+      if (!employee || !employee.branchId) {
+        toast.error("কর্মচারী বা শাখার তথ্য অসম্পূর্ণ");
+        return;
+      }
+
       const checkInTime = attendanceData.checkInTime
         ? new Date(`${selectedDate}T${attendanceData.checkInTime}`).getTime()
         : undefined;
@@ -312,9 +323,9 @@ export default function HRPayroll() {
 
       await markAttendance({
         employeeId: attendanceData.employeeId as Id<"hrEmployees">,
-        employeeName: employee?.fullName || "",
-        branchId: employee?.branchId || ("" as Id<"branches">),
-        branchName: employee?.branchName || "",
+        employeeName: employee.fullName,
+        branchId: employee.branchId,
+        branchName: employee.branchName,
         attendanceDate: new Date(selectedDate).getTime(),
         status: attendanceData.status,
         checkInTime,
@@ -352,15 +363,23 @@ export default function HRPayroll() {
     setIsSubmittingLeave(true);
     try {
       const employee = employees?.find((e) => e._id === leaveData.employeeId);
+      
+      // Validate required fields
+      if (!employee || !employee.branchId) {
+        toast.error("কর্মচারী বা শাখার তথ্য অসম্পূর্ণ");
+        setIsSubmittingLeave(false);
+        return;
+      }
+      
       const startDate = new Date(leaveData.startDate).getTime();
       const endDate = new Date(leaveData.endDate).getTime();
       const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
       await requestLeave({
         employeeId: leaveData.employeeId as Id<"hrEmployees">,
-        employeeName: employee?.fullName || "",
-        branchId: employee?.branchId || ("" as Id<"branches">),
-        branchName: employee?.branchName || "",
+        employeeName: employee.fullName,
+        branchId: employee.branchId,
+        branchName: employee.branchName,
         leaveType: leaveData.leaveType,
         startDate,
         endDate,
@@ -435,13 +454,20 @@ export default function HRPayroll() {
       const employee = employees?.find((e) => e._id === performanceData.employeeId);
       const manager = employees?.find((e) => e._id === performanceData.reportingManagerId);
 
+      // Validate required fields
+      if (!employee || !employee.branchId || !manager) {
+        toast.error("কর্মচারী, ম্যানেজার বা শাখার তথ্য অসম্পূর্ণ");
+        setIsSubmittingPerformance(false);
+        return;
+      }
+
       await createPerformanceReview({
         employeeId: performanceData.employeeId as Id<"hrEmployees">,
-        employeeName: employee?.fullName || "",
+        employeeName: employee.fullName,
         reportingManagerId: performanceData.reportingManagerId as Id<"hrEmployees">,
-        reportingManagerName: manager?.fullName || "",
-        branchId: employee?.branchId || ("" as Id<"branches">),
-        branchName: employee?.branchName || "",
+        reportingManagerName: manager.fullName,
+        branchId: employee.branchId,
+        branchName: employee.branchName,
         evaluationPeriodStart: new Date(performanceData.evaluationPeriodStart).getTime(),
         evaluationPeriodEnd: new Date(performanceData.evaluationPeriodEnd).getTime(),
         technicalSkills: performanceData.technicalSkills,
@@ -476,12 +502,8 @@ export default function HRPayroll() {
 
   const handleApprovePayroll = async (payrollId: Id<"hrPayroll">) => {
     try {
-      // Use a default admin user ID - in production, get this from auth context
-      const adminUserId = "admin" as Id<"users">;
       await approvePayroll({
         payrollId,
-        approvedBy: adminUserId,
-        approvedByName: "Admin",
       });
       toast.success("বেতন অনুমোদিত হয়েছে!");
     } catch (error) {
