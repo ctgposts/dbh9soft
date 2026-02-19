@@ -346,21 +346,14 @@ export default function Inventory() {
         toast.error("Cost price must be greater than 0");
         return;
       }
-      if (newProduct.sellingPrice < 0) {
-        toast.error("Selling price cannot be negative");
+      if (newProduct.sellingPrice <= 0) {
+        toast.error("Selling price must be greater than 0");
         return;
       }
       // ✅ FIX #10: Enforce selling price >= cost price to prevent negative margins
-      if (newProduct.sellingPrice > 0 && newProduct.sellingPrice < newProduct.costPrice) {
+      if (newProduct.sellingPrice < newProduct.costPrice) {
         toast.error(`Selling price (৳${newProduct.sellingPrice}) cannot be less than cost price (৳${newProduct.costPrice})`);
         return;
-      }
-      // If selling price is 0, require explicit user confirmation
-      if (newProduct.sellingPrice === 0) {
-        const confirmed = window.confirm(
-          "Selling price is 0. The POS system will need to set a price manually at checkout.\n\nContinue anyway?"
-        );
-        if (!confirmed) return;
       }
 
       // Auto-generate barcode if not provided
@@ -1204,17 +1197,17 @@ export default function Inventory() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Selling Price (৳)
+                        Selling Price (৳) *
                       </label>
                       <input
                         type="number"
                         value={newProduct.sellingPrice}
                         onChange={(e) => setNewProduct({...newProduct, sellingPrice: Number(e.target.value)})}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                        min="0"
+                        min="1"
                         step="0.01"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Optional - POS price will be used if not set</p>
+                      <p className="text-xs text-gray-500 mt-1">Required - Must be greater than 0</p>
                     </div>
 
 
