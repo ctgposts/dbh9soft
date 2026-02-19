@@ -1024,8 +1024,6 @@ export default function Inventory() {
             {/* Scrollable Content */}
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
               <div className="space-y-6">
-
-              <div className="space-y-6">
                 {/* Validation Info Banner */}
                 <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
                   <p className="text-sm text-blue-800">
