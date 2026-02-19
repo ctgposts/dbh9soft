@@ -126,7 +126,7 @@ export default function POS() {
     }
   }, [selectedCustomer, customers]);
 
-  // Calculate totals with proper tax handling
+  // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
   
   // ✅ FIX #17: Calculate discount from applied coupon or manual discount
@@ -146,8 +146,7 @@ export default function POS() {
       : discount;
   }
   
-  const tax = subtotal * 0.05; // 5% tax
-  const total = subtotal + tax - calculatedDiscountAmount;
+  const total = subtotal - calculatedDiscountAmount;
   const dueAmount = Math.max(0, total - paidAmount);
 
   // ✅ FIX #17: Validate and apply coupon code with expiry check
@@ -412,7 +411,7 @@ export default function POS() {
     setIsProcessing(true);
 
     try {
-      // ✅ FIX #3: Include correct discount amount and tax in sale data
+      // ✅ FIX #3: Include correct discount amount in sale data
       const saleData = {
         customerId: selectedCustomer?._id,
         customerName: selectedCustomer?.name || "Walk-in Customer",
@@ -426,7 +425,6 @@ export default function POS() {
         })),
         subtotal,
         discount: calculatedDiscountAmount,
-        tax,
         total,
         paidAmount,
         dueAmount,
@@ -798,10 +796,6 @@ export default function POS() {
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
                 <span>৳{subtotal.toLocaleString('en-BD')}</span>
-              </div>
-              <div className="flex justify-between text-sm text-orange-600">
-                <span>Tax (5%):</span>
-                <span>+৳{tax.toLocaleString('en-BD')}</span>
               </div>
               {calculatedDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
@@ -1220,10 +1214,6 @@ export default function POS() {
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
                   <span>৳{subtotal.toLocaleString('en-BD')}</span>
-                </div>
-                <div className="flex justify-between text-sm text-orange-600">
-                  <span>Tax (5%):</span>
-                  <span>+৳{tax.toLocaleString('en-BD')}</span>
                 </div>
                 {calculatedDiscountAmount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">

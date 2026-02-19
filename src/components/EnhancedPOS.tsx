@@ -275,14 +275,13 @@ export default function EnhancedPOS() {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.05; // 5% tax
   const deliveryCharges = deliveryType === "delivery" ? deliveryInfo.charges : 0;
   
   const discountAmount = discountType === "percentage" 
     ? (subtotal * discount) / 100
     : discount;
   
-  const total = subtotal + tax + deliveryCharges - discountAmount;
+  const total = subtotal + deliveryCharges - discountAmount;
 
   // ✅ FIX #2: Validate stock before checkout
   const validateStockBeforeCheckout = (): boolean => {
@@ -355,12 +354,11 @@ export default function EnhancedPOS() {
       }));
 
       const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const tax = subtotal * 0.05;
       const discountAmountFinal = discountType === "percentage" 
         ? (subtotal * discount) / 100
         : discount;
       const deliveryChargesAmount = deliveryType === "delivery" ? deliveryInfo.charges : 0;
-      const total = subtotal + tax + deliveryChargesAmount - discountAmountFinal;
+      const total = subtotal + deliveryChargesAmount - discountAmountFinal;
 
       const saleId = await createSale({
         items: saleItems,
@@ -369,7 +367,6 @@ export default function EnhancedPOS() {
         subtotal,
         discount: discountAmountFinal,
         total,
-        tax,
         paidAmount: total,
         dueAmount: 0,
         paymentMethod,
@@ -967,8 +964,7 @@ function CheckoutSection({
               <span>৳{subtotal.toLocaleString('en-BD')}</span>
             </div>
             <div className="flex justify-between">
-              <span>Tax (5%):</span>
-              <span>৳{tax.toLocaleString('en-BD')}</span>
+
             </div>
             {deliveryCharges > 0 && (
               <div className="flex justify-between">
