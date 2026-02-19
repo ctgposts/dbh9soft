@@ -478,7 +478,7 @@ export default function Inventory() {
         pictureUrl: "",
         barcode: "",
         productCode: "",
-        madeBy: "",
+        madeBy: "U.A.E",
         minStockLevel: 0,
         maxStockLevel: 100,
         description: "",
