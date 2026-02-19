@@ -251,17 +251,29 @@ export default function Inventory() {
     let filtered = products.filter(product => {
       const searchLower = searchTerm.toLowerCase();
       
-      // ✅ FIX #8: Enhanced variant search - search by barcode, color, size, and productCode
+      // ✅ ENHANCED SEARCH #8: Search by barcode, color, size, productCode, style #, and box number
       const matchesStandardSearch = !searchTerm || 
         product.name.toLowerCase().includes(searchLower) ||
         product.brand.toLowerCase().includes(searchLower) ||
         product.productCode.toLowerCase().includes(searchLower) ||
         product.barcode.toLowerCase().includes(searchLower) ||
+        // Search by Style Number (DBH-0000 format)
+        (product.styleNumber && product.styleNumber.toLowerCase().includes(searchLower)) ||
+        // Search by Box/Stock Location (BOX-1, BOX-2, etc)
+        (product.stockLocation && product.stockLocation.toLowerCase().includes(searchLower)) ||
         // Search by color + size combination for variant lookup
         (product.color && `${product.color.toLowerCase()} ${product.sizes?.join(' ').toLowerCase() || ''}`.includes(searchLower)) ||
         // Search by individual color or size
         (product.color && product.color.toLowerCase().includes(searchLower)) ||
-        (product.sizes && product.sizes.some(s => s.toLowerCase().includes(searchLower)));
+        (product.sizes && product.sizes.some(s => s.toLowerCase().includes(searchLower))) ||
+        // Search by fabric and embellishments
+        (product.fabric && product.fabric.toLowerCase().includes(searchLower)) ||
+        (product.embellishments && product.embellishments.toLowerCase().includes(searchLower)) ||
+        // Search by occasion and style
+        (product.occasion && product.occasion.toLowerCase().includes(searchLower)) ||
+        (product.style && product.style.toLowerCase().includes(searchLower)) ||
+        // Search by Made By information
+        (product.madeBy && product.madeBy.toLowerCase().includes(searchLower));
       
       // Check serial number search (if product has sequential serial)
       const serialNumber = serialNumberMap.get(product._id);
@@ -696,7 +708,7 @@ export default function Inventory() {
           <div>
             <input
               type="text"
-              placeholder="Search by product name, code, serial number, or variant ID..."
+              placeholder="Search by name, code, barcode, style #, box #, color, size, fabric, occasion..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all placeholder-gray-500 text-sm"
@@ -795,6 +807,53 @@ export default function Inventory() {
           >
             Clear Filters
           </button>
+        </div>
+
+        {/* Search Help Section */}
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <details className="cursor-pointer">
+            <summary className="font-semibold text-blue-900 text-sm">
+              💡 Search Tips & Examples
+            </summary>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-blue-800">
+              <div>
+                <strong>Product Name:</strong> Search "Abaya" or "Dress"
+              </div>
+              <div>
+                <strong>Brand:</strong> Search "Dubai Borka" or "DUBAI"
+              </div>
+              <div>
+                <strong>Product Code:</strong> Search "ABC1234" or variant codes
+              </div>
+              <div>
+                <strong>Barcode:</strong> Search "DBH-BL-52-01" or scan barcodes
+              </div>
+              <div>
+                <strong>Style # (DBH-XXXX):</strong> Search "DBH-0001" or "DBH-0042"
+              </div>
+              <div>
+                <strong>Box Number:</strong> Search "BOX-1", "BOX-2", etc.
+              </div>
+              <div>
+                <strong>Color:</strong> Search "Black", "Blue", "Pink"
+              </div>
+              <div>
+                <strong>Size:</strong> Search "52", "54", "56" inches
+              </div>
+              <div>
+                <strong>Fabric:</strong> Search "Crepe", "Chiffon", "Jersey"
+              </div>
+              <div>
+                <strong>Occasion:</strong> Search "Party Wear", "Wedding"
+              </div>
+              <div>
+                <strong>Made By:</strong> Search "U.A.E", "Bangladesh"
+              </div>
+              <div>
+                <strong>Embellishments:</strong> Search "Beaded", "Embroidered"
+              </div>
+            </div>
+          </details>
         </div>
       </div>
 
