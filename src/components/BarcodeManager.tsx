@@ -137,7 +137,8 @@ export default function BarcodeManager() {
 
   // ✅ FIX: Extract items array from paginated products query response
   const productsResponse = useQuery(api.products.list, { 
-    categoryId: selectedCategory
+    categoryId: selectedCategory,
+    limit: 1000
   });
   const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list);

@@ -63,7 +63,7 @@ export default function CouponManagement() {
   const coupons = useQuery(api.coupons.list, {}) || [];
   const categories = useQuery(api.categories.list, {}) || [];
   const branches = useQuery(api.branches.list, {}) || [];
-  const products = useQuery(api.products.list, {}) || [];
+  const products = useQuery(api.products.list, { limit: 1000 }) || [];
 
   // Mutations
   const createCouponMutation = useMutation(api.coupons.create);

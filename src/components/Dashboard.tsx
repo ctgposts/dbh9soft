@@ -45,7 +45,7 @@ export function Dashboard() {
   const notifiedCriticalRef = useRef<Set<string>>(new Set());
   
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
+  const productsResponse = useQuery(api.products.list, { limit: 1000 });
   const products = Array.isArray(productsResponse?.items) ? productsResponse.items : [];
   const salesData = useQuery(api.sales.list, {});
   const sales = Array.isArray(salesData) ? salesData : [];

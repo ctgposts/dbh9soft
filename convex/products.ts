@@ -103,8 +103,8 @@ export const list = query({
   handler: async (ctx, args) => {
     await getAuthUserId(ctx);
     
-    // Default pagination: 20 items per page, max 100
-    const limit = Math.min(args.limit || 20, 100);
+    // Default pagination: 1000 items per page, max 1000 (increased from 20 to show all products)
+    const limit = Math.min(args.limit || 1000, 1000);
     const offset = args.offset || 0;
     
     let products;

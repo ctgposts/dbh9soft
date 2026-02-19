@@ -13,7 +13,7 @@ export default function DiscountManagement() {
   const discounts = useQuery(api.discounts.list, {});
   const categories = useQuery(api.categories.list);
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
+  const productsResponse = useQuery(api.products.list, { limit: 1000 });
   const products = productsResponse?.items || [];
   const branches = useQuery(api.branches.list, {});
   const discountStats = useQuery(api.discountUtils.getDiscountStats, {});

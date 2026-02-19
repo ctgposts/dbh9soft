@@ -17,7 +17,7 @@ export default function WhatsAppOrders() {
   const employees = useQuery(api.employees.list, {});
   // ✅ FIX #19: Query products to verify stock before conversion
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
+  const productsResponse = useQuery(api.products.list, { limit: 1000 });
   const products = productsResponse?.items || [];
 
   const updateStatus = useMutation(api.whatsappOrders.updateStatus);

@@ -146,7 +146,7 @@ export default function RefundManagement() {
       // ✅ FIX #5: Restore stock for each refunded item
       for (const item of refund.items) {
         // Get current product to update stock
-        const products = await useQuery(api.products.list, {});
+        const products = await useQuery(api.products.list, { limit: 1000 });
         const product = products?.find(p => p._id === item.productId);
         
         if (product) {

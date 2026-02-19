@@ -55,7 +55,7 @@ export default function StockTransferManagement() {
 
   const branches = useQuery(api.branches.list, {}) || [];
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
+  const productsResponse = useQuery(api.products.list, { limit: 1000 });
   const products = productsResponse?.items || [];
   const transfers = useQuery(api.stockTransfer.list, {}) || [];
   const pendingTransfers = useQuery(api.stockTransfer.list, { status: "pending" }) || [];

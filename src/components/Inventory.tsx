@@ -168,7 +168,7 @@ export default function Inventory() {
   ]);
 
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
+  const productsResponse = useQuery(api.products.list, { limit: 1000 });
   const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list) || [];
   const addProduct = useMutation(api.products.create);
