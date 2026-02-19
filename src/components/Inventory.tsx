@@ -1099,7 +1099,7 @@ export default function Inventory() {
                         <option value="FAKRU PRINT">FAKRU PRINT</option>
                         <option value="KORIYAN SIMAR">KORIYAN SIMAR</option>
                         <option value="JORI SHIPON">JORI SHIPON</option>
-						<option value="VELBET">VELBET</option>
+						<option value="BELVET">BELVET</option>
                       </select>
                     </div>
 
