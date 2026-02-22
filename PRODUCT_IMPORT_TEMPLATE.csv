@@ -1,0 +1,21 @@
+name,brand,fabric,color,sizes,costprice,sellingprice,currentstock,minstocklevel,maxstocklevel,embellishments,occasion,barcode,productcode,madeBy,stocklocation,description,model,style,isactive
+Elegant Evening Abaya Black,DUBAI BORKA HOUSE,Crepe,Black,"L,XL,XXL",500,750,50,5,100,Hand Embroidery,Party Wear,BBOX-001,PR-001,U.A.E,BOX-1,Premium evening wear,Abaya-001,Dubai Style,true
+Premium Chiffon Saree Navy,DUBAI BORKA HOUSE,Chiffon,Navy Blue,"XS,S,M,L",400,600,30,3,80,Embroidered,Formal,SAREE-001,PR-002,U.A.E,BOX-2,Festive collection,Saree-101,Modern,true
+Casual Cotton Shirt White,DUBAI BORKA HOUSE,Cotton,White,"M,L,XL",200,350,100,10,200,,Daily Wear,SHIRT-001,PR-003,U.A.E,BOX-3,Comfortable daily wear,Shirt-201,Casual,true
+Silk Occasion Dress Maroon,DUBAI BORKA HOUSE,Silk,Maroon,"S,M,L,XL",800,1200,20,2,50,Beads and Stones,Wedding,DRESS-001,PR-004,U.A.E,BOX-4,Wedding collection,Dress-301,Elegant,true
+Georgette Printed Dupatta Green,DUBAI BORKA HOUSE,Georgette,Green,Free Size,100,150,80,8,150,Printed,Casual,DUPA-001,PR-005,U.A.E,BOX-5,Daily use dupatta,Dupatta-401,Trendy,true
+Jersey T-Shirt Blue,DUBAI BORKA HOUSE,Jersey,Blue,"S,M,L,XL,XXL",150,250,200,20,300,Minimal,Daily Wear,TSHRT-001,PR-006,U.A.E,BOX-1,Basic essentials,Tshirt-501,Modern,true
+Nida Abaya with Embroidery,DUBAI BORKA HOUSE,Nida,Black,One Size,600,900,40,5,100,Hand Embroidery,Party Wear,ABAYA-001,PR-007,U.A.E,BOX-2,Premium abaya,Abaya-501,Dubai Style,true
+Polyester Formal Pants Black,DUBAI BORKA HOUSE,Polyester,Black,"28,30,32,34,36",300,500,60,6,120,,Formal,PANTS-001,PR-008,U.A.E,BOX-3,Office collection,Pants-601,Professional,true
+CEY Saree Premium Gold,DUBAI BORKA HOUSE,CEY,Gold,Free Size,1000,1500,15,2,40,Gold Border,Formal,SAREE-002,PR-009,U.A.E,BOX-4,Luxury collection,Saree-701,Elegant,true
+ZOOM Fabric Kurta Pink,DUBAI BORKA HOUSE,ZOOM,Pink,"XS,S,M,L,XL",250,400,70,7,140,Floral Print,Casual,KURTA-001,PR-010,U.A.E,BOX-5,Quick-dry collection,Kurta-801,Trendy,true
+Summer Lehenga Teal,DUBAI BORKA HOUSE,Chiffon,Teal,"XS,S,M",700,1100,25,3,60,Mirror Work,Eid Special,LEHENGA-001,PR-011,U.A.E,BOX-1,Eid special collection,Lehenga-901,Festive,true
+Winter Wool Shawl Maroon,DUBAI BORKA HOUSE,Wool,Maroon,Free Size,150,250,90,9,180,Fringes,Daily Wear,SHAWL-001,PR-012,U.A.E,BOX-2,Warm collection,Shawl-1001,Classic,true
+Linen Summer Dress Beige,DUBAI BORKA HOUSE,Linen,Beige,"S,M,L,XL",350,550,45,5,100,,Casual,DRESS-002,PR-013,U.A.E,BOX-3,Light weight,Dress-1101,Modern,true
+Viscose Printed Saree Maroon,DUBAI BORKA HOUSE,Viscose,Maroon,Free Size,450,700,35,4,80,Printed Border,Party Wear,SAREE-003,PR-014,U.A.E,BOX-4,Printed collection,Saree-1201,Trendy,true
+Denim Jacket Blue,DUBAI BORKA HOUSE,Denim,Blue,"S,M,L,XL,XXL",400,650,55,6,120,Studs,Casual,JACKET-001,PR-015,U.A.E,BOX-5,Denim collection,Jacket-1301,Cool,true
+Silk Blend Dupatta Crimson,DUBAI BORKA HOUSE,Silk,Crimson,Free Size,500,800,40,4,100,Gold Embroidery,Formal,DUPA-002,PR-016,U.A.E,BOX-1,Premium dupatta,Dupatta-1401,Elegant,true
+Lawn Kameez Kurta White,DUBAI BORKA HOUSE,Lawn,White,"XS,S,M,L",200,350,120,12,250,Minimalist Embroidery,Daily Wear,KURTA-002,PR-017,U.A.E,BOX-2,Summer collection,Kurta-1501,Fresh,true
+Velvet Occasion Shawl Purple,DUBAI BORKA HOUSE,Velvet,Purple,Free Size,800,1250,18,2,50,Crystal Stones,Party Wear,SHAWL-002,PR-018,U.A.E,BOX-3,Luxury shawls,Shawl-1601,Glamorous,true
+Cotton Blend Trousers Khaki,DUBAI BORKA HOUSE,Cotton,Khaki,"28,30,32,34,36,38",250,450,75,8,150,,Formal,PANTS-002,PR-019,U.A.E,BOX-4,Professional wear,Pants-1701,Classic,true
+Rayon Printed Dress Multicolor,DUBAI BORKA HOUSE,Rayon,Multicolor,"S,M,L,XL",300,500,65,7,140,Botanical Prints,Casual,DRESS-003,PR-020,U.A.E,BOX-5,Colorful collection,Dress-1801,Vibrant,true
