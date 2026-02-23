@@ -1,0 +1,7 @@
+{
+  "node": {
+    "externalNodeModules": [
+      "@auth/core"
+    ]
+  }
+}

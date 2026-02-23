@@ -29,6 +29,7 @@ import type * as notifications from "../notifications.js";
 import type * as onlineStore from "../onlineStore.js";
 import type * as outstanding from "../outstanding.js";
 import type * as phase4Analytics from "../phase4Analytics.js";
+import type * as productCount from "../productCount.js";
 import type * as productImageRecognition from "../productImageRecognition.js";
 import type * as productMigration from "../productMigration.js";
 import type * as products from "../products.js";
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   onlineStore: typeof onlineStore;
   outstanding: typeof outstanding;
   phase4Analytics: typeof phase4Analytics;
+  productCount: typeof productCount;
   productImageRecognition: typeof productImageRecognition;
   productMigration: typeof productMigration;
   products: typeof products;
