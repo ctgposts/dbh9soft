@@ -38,11 +38,6 @@ export default function EnhancedPOS() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [filters, setFilters] = useState<SearchFilters>({ searchTerm: "" });
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
     phone: "",
