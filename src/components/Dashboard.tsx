@@ -45,9 +45,9 @@ export function Dashboard() {
   const notifiedCriticalRef = useRef<Set<string>>(new Set());
   
   // ✅ FIX: Extract items array from paginated products query response
-  // ✅ UNLIMITED: Load all data without any limits
-  const productsResponse = useQuery(api.products.list, {});
-  const products = Array.isArray(productsResponse?.items) ? productsResponse.items : [];
+  // ✅ UNLIMITED: Load ALL products without pagination
+  // Using new getAllProducts query to bypass Convex default 20-item limit
+  const products = useQuery(api.products.getAllProducts, {}) || [];
   const salesData = useQuery(api.sales.list, {});
   const sales = Array.isArray(salesData) ? salesData : [];
   const categoriesData = useQuery(api.categories.list);
@@ -61,7 +61,7 @@ export function Dashboard() {
   const { isOnline, isSyncing } = useOfflineSync();
   
   // Check if data is still loading - check if queries are undefined (loading state)
-  const isLoading = productsResponse === undefined || !sales;
+  const isLoading = products === undefined || !sales;
 
   // Calculate stats - only when data is available
   const totalProducts = products?.length || 0;

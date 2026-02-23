@@ -235,6 +235,50 @@ export const list = query({
   },
 });
 
+/**
+ * ✅ NEW: Get ALL products without pagination
+ * This query ALWAYS returns all products, bypassing Convex's default pagination
+ * Used by Dashboard, Inventory to show complete product list
+ */
+export const getAllProducts = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAuthUserId(ctx);
+    
+    console.log(`\n🔄 [getAllProducts] STARTING`);
+    
+    // Get ALL products from database
+    let products = await ctx.db.query("products").collect();
+    console.log(`  Step 1: Total from DB: ${products.length}`);
+    
+    // Ensure all products have branchStock initialized
+    const branches = await ctx.db.query("branches").collect();
+    products = products.map(product => {
+      if (!product.branchStock || product.branchStock.length === 0) {
+        const initializeBranchStock = branches.map(branch => ({
+          branchId: branch._id,
+          branchName: branch.name,
+          currentStock: product.currentStock || 0,
+          minStockLevel: product.minStockLevel || 0,
+          maxStockLevel: product.maxStockLevel || 100,
+        }));
+        return { ...product, branchStock: initializeBranchStock };
+      }
+      return product;
+    });
+    
+    // Get active products (if all are inactive, show all anyway)
+    const activeProducts = products.filter(p => p.isActive === true);
+    const productsToReturn = activeProducts.length > 0 ? activeProducts : products;
+    
+    console.log(`  Step 2: Active products: ${activeProducts.length}`);
+    console.log(`  Step 3: Returning: ${productsToReturn.length}`);
+    console.log(`✅ [getAllProducts] COMPLETE - Returning ${productsToReturn.length} products\n`);
+    
+    return productsToReturn;
+  },
+});
+
 export const get = query({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {

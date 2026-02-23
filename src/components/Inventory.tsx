@@ -167,9 +167,9 @@ export default function Inventory() {
     { id: `variant-${Date.now()}`, color: "", size: "", stock: 0 }
   ]);
 
-  // ✅ UNLIMITED: Load all products without any limits
-  const productsResponse = useQuery(api.products.list, {});
-  const products = productsResponse?.items || [];
+  // ✅ UNLIMITED: Load ALL products without pagination
+  // Using new getAllProducts query to bypass Convex default 20-item limit
+  const products = useQuery(api.products.getAllProducts, {}) || [];
   const categories = useQuery(api.categories.list) || [];
   const addProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
@@ -182,34 +182,29 @@ export default function Inventory() {
     console.group('🔍 INVENTORY COMPREHENSIVE DEBUG');
     
     console.log('Step 1: Query Response');
-    console.log('  productsResponse:', productsResponse);
-    console.log('  productsResponse?.items:', productsResponse?.items);
+    console.log('  products (getAllProducts):', products);
     
     console.log('\nStep 2: Products Array');
-    console.log('  products.length:', products.length);
+    console.log('  products.length:', products?.length || 0);
     console.log('  products array:', products);
     
     console.log('\nStep 3: Data Validation');
-    if (products.length > 0) {
-      console.log('  ✅ Products found!');
+    if (products && products.length > 0) {
+      console.log('  ✅ Products found!', products.length, 'total');
       console.log('  First product:', products[0]);
       console.log('  Last product:', products[products.length - 1]);
       
       const totalValue = products.reduce((sum, p) => sum + ((p.currentStock || 0) * (p.sellingPrice || 0)), 0);
       console.log('  Total stock value:', totalValue);
     } else {
-      console.warn('  ❌ NO PRODUCTS! Check:');
-      console.warn('    - Is productsResponse undefined?', productsResponse === undefined);
-      console.warn('    - Is productsResponse?.items undefined?', productsResponse?.items === undefined);
-      console.warn('    - Is productsResponse?.items an array?', Array.isArray(productsResponse?.items));
-      console.warn('    - What is the structure?', JSON.stringify(productsResponse, null, 2));
+      console.warn('  ❌ NO PRODUCTS! Array is empty');
     }
     
     console.log('\nStep 4: Categories');
     console.log('  categories.length:', categories?.length || 0);
     
     console.groupEnd();
-  }, [products.length, productsResponse, categories]);
+  }, [products?.length, products, categories]);
 
   // NOTE: Removed auto-creation of "General" category
   // Categories must be manually created by the user

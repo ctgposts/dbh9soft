@@ -68,9 +68,9 @@ export default function POS() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
 
-  // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, {});
-  const products = productsResponse?.items || [];
+  // ✅ UNLIMITED: Load ALL products without pagination
+  // Using new getAllProducts query to bypass Convex default 20-item limit
+  const products = useQuery(api.products.getAllProducts, {}) || [];
   // ✅ UNLIMITED: Load all customers without any limits
   const customersResponse = useQuery(api.customers.list, {});
   const customers = customersResponse?.items || [];

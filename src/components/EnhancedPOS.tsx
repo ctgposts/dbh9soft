@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
@@ -47,12 +47,31 @@ export default function EnhancedPOS() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [activeTab, setActiveTab] = useState("products"); // For mobile tabs
 
-  // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, { 
-    categoryId: selectedCategory,
-    searchTerm: searchTerm || undefined
-  });
-  const products = productsResponse?.items || [];
+  // ✅ UNLIMITED: Load ALL products without pagination
+  // Using new getAllProducts query to bypass Convex default 20-item limit
+  // Then apply client-side filtering for category and search
+  const allProducts = useQuery(api.products.getAllProducts, {}) || [];
+  
+  // Apply client-side filtering for search and category
+  const products = useMemo(() => {
+    let filtered = allProducts || [];
+    
+    if (selectedCategory) {
+      filtered = filtered.filter(p => p.categoryId === selectedCategory);
+    }
+    
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name?.toLowerCase().includes(searchLower) ||
+        p.brand?.toLowerCase().includes(searchLower) ||
+        p.barcode?.includes(searchTerm)
+      );
+    }
+    
+    return filtered;
+  }, [allProducts, selectedCategory, searchTerm]);
+  
   const categories = useQuery(api.categories.list);
   const createSale = useMutation(api.sales.create);
   const getSale = useQuery(api.sales.get, 
