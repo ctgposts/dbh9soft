@@ -69,7 +69,7 @@ export default function POS() {
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
 
   // ✅ FIX: Extract items array from paginated products query response
-  const productsResponse = useQuery(api.products.list, { limit: 1000 });
+  const productsResponse = useQuery(api.products.list, {});
   const products = productsResponse?.items || [];
   // ✅ UNLIMITED: Load all customers without any limits
   const customersResponse = useQuery(api.customers.list, {});

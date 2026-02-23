@@ -205,6 +205,17 @@ export const list = query({
     }
     
     // Return all products if no limit specified
+    return {
+      items: products,
+      pagination: {
+        total: totalCount,
+        limit: products.length,
+        offset: 0,
+        hasMore: false,
+        pageNumber: 1,
+        totalPages: 1,
+      }
+    };
   },
 });
 

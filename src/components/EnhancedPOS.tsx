@@ -50,8 +50,7 @@ export default function EnhancedPOS() {
   // ✅ FIX: Extract items array from paginated products query response
   const productsResponse = useQuery(api.products.list, { 
     categoryId: selectedCategory,
-    searchTerm: searchTerm || undefined,
-    limit: 1000
+    searchTerm: searchTerm || undefined
   });
   const products = productsResponse?.items || [];
   const categories = useQuery(api.categories.list);
