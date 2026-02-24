@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { Id } from "../../convex/_generated/dataModel";
 import { InvoiceModal } from "./InvoiceModal";
+import { BarcodeScanner } from "./BarcodeScanner";
 
 interface CartItem {
   productId: Id<"products">;
@@ -50,6 +51,7 @@ export default function POS() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState("");//✅ NEW: Barcode scanner input buffer
   const [isBarcodeMode, setIsBarcodeMode] = useState(false); // ✅ NEW: Toggle barcode scanner mode
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false); // ✅ NEW: Show camera scanner modal
   const barcodeTimeoutRef = useRef<NodeJS.Timeout>();// ✅ NEW: Timeout for barcode completion
   const [mobilePaymentDetails, setMobilePaymentDetails] = useState({
     phoneNumber: "",
@@ -213,6 +215,13 @@ export default function POS() {
 
     toast.success(`✅ ${scannedProduct.name} scanned and added!`);
     setBarcodeInput("");
+  };
+
+  // ✅ NEW: Handle camera scanner detection
+  const handleCameraBarcodeScan = (barcode: string) => {
+    processBarcodeScan(barcode);
+    // Close scanner after successful scan
+    setShowBarcodeScanner(false);
   };
 
   // Calculate totals
@@ -590,6 +599,13 @@ export default function POS() {
           <p className="text-sm text-gray-600 mt-1">Process sales transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={() => setShowBarcodeScanner(true)}
+            className="px-6 py-3 text-sm bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-semibold transition-all duration-300 flex items-center gap-2"
+            title="Open camera barcode scanner"
+          >
+            📸 Scan Barcode
+          </button>
           <button
             onClick={() => setIsBarcodeMode(!isBarcodeMode)}
             className={`px-6 py-3 text-sm rounded-2xl font-semibold transition-all duration-300 flex items-center gap-2 ${ 
@@ -1507,6 +1523,13 @@ export default function POS() {
           }}
         />
       )}
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        isOpen={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onBarcodeDetected={handleCameraBarcodeScan}
+      />
       </div>
     </div>
   );
