@@ -146,6 +146,7 @@ export default function Inventory() {
   const [stockStatus, setStockStatus] = useState<"all" | "in-stock" | "low-stock" | "out-of-stock">("all");
   const [minPrice, setMinPrice] = useState<number | undefined>();
   const [maxPrice, setMaxPrice] = useState<number | undefined>();
+  const [showInactiveProducts, setShowInactiveProducts] = useState(false); // ✅ NEW: Show/hide out-of-stock products
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // New product form state
@@ -497,7 +498,11 @@ export default function Inventory() {
       const matchesPrice = (!minPrice || product.sellingPrice >= minPrice) && 
                           (!maxPrice || product.sellingPrice <= maxPrice);
 
-      return matchesSearch && matchesCategory && matchesBrand && matchesFabric && matchesColor && matchesOccasion && matchesStockStatus && matchesPrice;
+      // ✅ ENHANCED: Out-of-stock visibility toggle
+      const isOutOfStock = product.currentStock === 0;
+      const matchesInactiveProductFilter = showInactiveProducts || !isOutOfStock;
+
+      return matchesSearch && matchesCategory && matchesBrand && matchesFabric && matchesColor && matchesOccasion && matchesStockStatus && matchesPrice && matchesInactiveProductFilter;
     });
 
     // Sort products
@@ -519,7 +524,7 @@ export default function Inventory() {
     });
 
     return filtered;
-  }, [products, searchTerm, filterCategory, filterBrand, filterFabric, filterColor, filterOccasion, sortBy, sortOrder, stockStatus, minPrice, maxPrice]);
+  }, [products, searchTerm, filterCategory, filterBrand, filterFabric, filterColor, filterOccasion, sortBy, sortOrder, stockStatus, minPrice, maxPrice, showInactiveProducts]);
 
   // Optimized callback functions
   const addVariant = useCallback(() => {
@@ -1060,6 +1065,17 @@ export default function Inventory() {
                 ✕ Clear Filters
               </button>
             )}
+            <button
+              onClick={() => setShowInactiveProducts(!showInactiveProducts)}
+              className={`px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                showInactiveProducts
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+              }`}
+              title={showInactiveProducts ? 'Hide out-of-stock products' : 'Show out-of-stock products'}
+            >
+              {showInactiveProducts ? '👁️ Showing Out-of-Stock' : '👁‍🗨️ Hide Out-of-Stock'}
+            </button>
           </div>
 
           {/* Results Info */}
@@ -1392,15 +1408,29 @@ export default function Inventory() {
           const stockStatus = getStockStatus(product);
           
           return (
-            <div key={product._id} className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+            <div key={product._id} className={`bg-white rounded-lg shadow border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow ${
+              product.currentStock === 0 ? 'opacity-75' : ''
+            }`}>
               {product.pictureUrl && (
-                <img
-                  src={product.pictureUrl}
-                  alt={product.name}
-                  className="w-full h-32 sm:h-40 object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                  loading="lazy"
-                  onClick={() => setImageModalUrl(product.pictureUrl)}
-                />
+                <div className="relative">
+                  <img
+                    src={product.pictureUrl}
+                    alt={product.name}
+                    className={`w-full h-32 sm:h-40 object-cover cursor-pointer hover:opacity-80 transition-opacity ${
+                      product.currentStock === 0 ? 'grayscale' : ''
+                    }`}
+                    loading="lazy"
+                    onClick={() => setImageModalUrl(product.pictureUrl)}
+                  />
+                  {product.currentStock === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                      <div className="text-center">
+                        <div className="text-4xl">🚫</div>
+                        <div className="text-white font-bold text-sm mt-1">STOCK OUT</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               
               <div className="p-4">
