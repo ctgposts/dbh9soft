@@ -336,14 +336,10 @@ export default function Inventory() {
   }, []);
 
   // ✅ ENHANCED: Debounced search handler
+  // ✅ FIX #19: Immediate search input response without lag
   const handleSearchChange = useCallback((value: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    
-    debounceTimerRef.current = setTimeout(() => {
-      setSearchTerm(value);
-    }, 300); // 300ms debounce delay
+    // Update search term immediately for responsive UI
+    setSearchTerm(value);
   }, []);
 
   // ✅ Keyboard Shortcuts for Edit Modal
