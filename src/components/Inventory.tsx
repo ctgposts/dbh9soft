@@ -1801,7 +1801,7 @@ export default function Inventory() {
                       <EditableCombobox
                         value={newProduct.fabric}
                         onChange={(value) => setNewProduct({...newProduct, fabric: value})}
-                        options={fabricOptions.map((f: any) => f.name)}
+                        options={fabricOptions}
                         type="fabric"
                         placeholder="Select or type fabric..."
                         onNewOptionAdded={() => {
@@ -1835,7 +1835,7 @@ export default function Inventory() {
                       <EditableCombobox
                         value={newProduct.embellishments}
                         onChange={(value) => setNewProduct({...newProduct, embellishments: value})}
-                        options={embellishmentOptions.map((e: any) => e.name)}
+                        options={embellishmentOptions}
                         type="embellishment"
                         placeholder="Select or type embellishment..."
                         onNewOptionAdded={() => {
@@ -2290,7 +2290,7 @@ export default function Inventory() {
                       <EditableCombobox
                         value={editingProduct.fabric || ""}
                         onChange={(value) => setEditingProduct({...editingProduct, fabric: value})}
-                        options={fabricOptions.map((f: any) => f.name)}
+                        options={fabricOptions}
                         type="fabric"
                         placeholder="Select or type fabric..."
                         onNewOptionAdded={() => {
@@ -2353,7 +2353,7 @@ export default function Inventory() {
                     <EditableCombobox
                       value={editingProduct.embellishments || ""}
                       onChange={(value) => setEditingProduct({...editingProduct, embellishments: value})}
-                      options={embellishmentOptions.map((e: any) => e.name)}
+                      options={embellishmentOptions}
                       type="embellishment"
                       placeholder="Select or type embellishment..."
                       onNewOptionAdded={() => {
