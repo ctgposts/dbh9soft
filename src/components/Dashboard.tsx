@@ -543,18 +543,18 @@ export function Dashboard() {
           <DashboardAlertsSummary />
 
           {/* ✅ NEW: Fabric Analyzer Tools Section */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 shadow-sm p-6">
-            <div className="flex items-start justify-between mb-6">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 shadow-sm p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-3xl">🧵</span>
-                  <h3 className="text-lg font-bold text-slate-900">Fabric Analyzer</h3>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                  <span className="text-2xl sm:text-3xl">🧵</span>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">Fabric Analyzer</h3>
                 </div>
-                <p className="text-sm text-slate-600">Analyze fabric properties from uploaded images instantly</p>
+                <p className="text-xs sm:text-sm text-slate-600">Analyze fabric properties from uploaded images instantly</p>
               </div>
               <button
                 onClick={() => setShowFabricAnalyzer(true)}
-                className="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 font-semibold transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
+                className="w-full sm:w-auto px-3 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 font-semibold transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center sm:justify-start gap-2 text-xs sm:text-sm whitespace-nowrap"
                 title="Open Fabric Analyzer Tool"
               >
                 <span>📸</span>
@@ -562,8 +562,8 @@ export function Dashboard() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+              <div className="bg-white rounded-lg p-2 sm:p-3 border border-amber-100">
                 <p className="text-xs font-semibold text-amber-600 mb-1">📋 What it detects:</p>
                 <ul className="text-xs text-slate-600 space-y-1">
                   <li>✓ Fabric type (Crepe, Chiffon, etc.)</li>
@@ -571,7 +571,7 @@ export function Dashboard() {
                   <li>✓ Craftsmanship details</li>
                 </ul>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
+              <div className="bg-white rounded-lg p-2 sm:p-3 border border-amber-100">
                 <p className="text-xs font-semibold text-amber-600 mb-1">🎯 How to use:</p>
                 <ul className="text-xs text-slate-600 space-y-1">
                   <li>1. Click "Open Analyzer"</li>
@@ -579,7 +579,7 @@ export function Dashboard() {
                   <li>3. View analysis results</li>
                 </ul>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
+              <div className="bg-white rounded-lg p-2 sm:p-3 border border-amber-100">
                 <p className="text-xs font-semibold text-amber-600 mb-1">💡 Use case:</p>
                 <ul className="text-xs text-slate-600 space-y-1">
                   <li>✓ Add new products</li>
@@ -619,17 +619,17 @@ export function Dashboard() {
 
       {/* ✅ NEW: Fabric Analyzer Modal */}
       {showFabricAnalyzer && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6 flex items-center justify-between border-b border-amber-700">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">🧵</span>
-                <h2 className="text-2xl font-bold">Fabric Analyzer</h2>
+            <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-4 sm:p-6 flex items-center justify-between border-b border-amber-700">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="text-2xl sm:text-3xl flex-shrink-0">🧵</span>
+                <h2 className="text-lg sm:text-2xl font-bold truncate">Fabric Analyzer</h2>
               </div>
               <button
                 onClick={() => setShowFabricAnalyzer(false)}
-                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors text-2xl"
+                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors text-xl sm:text-2xl flex-shrink-0"
                 title="Close"
               >
                 ✕
@@ -637,7 +637,7 @@ export function Dashboard() {
             </div>
 
             {/* Modal Content */}
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <FabricAnalyzer />
             </div>
           </div>
