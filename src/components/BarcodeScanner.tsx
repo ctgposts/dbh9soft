@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { toast } from 'sonner';
 
 interface BarcodeScannerProps {
@@ -9,7 +9,7 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }: BarcodeScannerProps) {
-  const scannerRef = useRef<HTML5QrcodeScanner | null>(null);
+  const scannerRef = useRef<any>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,9 +68,7 @@ export function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }: BarcodeSc
       // Cleanup on unmount
       if (scannerRef.current) {
         try {
-          if (scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
-            scannerRef.current.pause();
-          }
+          scannerRef.current.pause();
         } catch (e) {
           console.error('Error stopping scanner:', e);
         }
@@ -81,11 +79,7 @@ export function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }: BarcodeSc
   const handleClose = () => {
     if (scannerRef.current) {
       try {
-        const state = scannerRef.current.getState();
-        if (state === Html5QrcodeScannerState.SCANNING) {
-          scannerRef.current.pause();
-        }
-        // Don't call stop() as it causes issues, just pause
+        scannerRef.current.pause();
       } catch (e) {
         console.error('Error closing scanner:', e);
       }
