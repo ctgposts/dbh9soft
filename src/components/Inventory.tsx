@@ -136,10 +136,14 @@ const parseProductNameForAutoFill = (
     return {};
   }
 
-  // Defensive: ensure arrays are defined
-  const safeCategories = categories ?? [];
-  const safeFabricOptions = fabricOptions ?? [];
-  const safeEmbellishmentOptions = embellishmentOptions ?? [];
+  // Defensive: ensure arrays are defined and filter out non-strings
+  const safeCategories = (categories ?? []).filter((c): c is any => c != null);
+  const safeFabricOptions = (fabricOptions ?? [])
+    .filter((f): f is string => typeof f === 'string' && f.length > 0)
+    .map(f => f.trim());
+  const safeEmbellishmentOptions = (embellishmentOptions ?? [])
+    .filter((e): e is string => typeof e === 'string' && e.length > 0)
+    .map(e => e.trim());
 
   const parts = productName.trim().split(/\s+/); // Split by whitespace
   if (parts.length < 2) {
@@ -147,6 +151,10 @@ const parseProductNameForAutoFill = (
   }
 
   const result: { categoryId?: string; fabric?: string; embellishments?: string } = {};
+
+  // DEBUG: Log fabric and embellishment options
+  console.log('📋 Available Fabrics:', safeFabricOptions);
+  console.log('📋 Available Embellishments:', safeEmbellishmentOptions);
 
   // First part = Category (case-insensitive match)
   const firstPart = parts[0];
@@ -156,28 +164,43 @@ const parseProductNameForAutoFill = (
     );
     if (matchedCategory) {
       result.categoryId = matchedCategory._id;
+      console.log('✅ Category match found:', matchedCategory.name);
     }
   }
 
   // Second part = Fabric (case-insensitive match)
   const secondPart = parts[1];
+  console.log(`🔍 Looking for Fabric match: "${secondPart.toLowerCase()}" in:`, safeFabricOptions.map(f => f.toLowerCase()));
   if (safeFabricOptions.length > 0) {
     const matchedFabric = safeFabricOptions.find(
-      (fab: string) => fab && fab.toLowerCase() === secondPart.toLowerCase()
+      (fab: string) => fab.trim().toLowerCase() === secondPart.toLowerCase()
     );
     if (matchedFabric) {
       result.fabric = matchedFabric;
+      console.log('✅ Fabric match found:', matchedFabric);
+    } else {
+      console.log('❌ Fabric NOT matched for:', secondPart);
     }
+  } else {
+    console.log('⚠️ No fabrics available to match');
   }
 
   // Remaining parts = Embellishment (case-insensitive match)
-  if (parts.length > 2 && safeEmbellishmentOptions.length > 0) {
+  if (parts.length > 2) {
     const remainingParts = parts.slice(2).join(" ");
-    const matchedEmbellishment = safeEmbellishmentOptions.find(
-      (emb: string) => emb && emb.toLowerCase() === remainingParts.toLowerCase()
-    );
-    if (matchedEmbellishment) {
-      result.embellishments = matchedEmbellishment;
+    console.log(`🔍 Looking for Embellishment match: "${remainingParts.toLowerCase()}" in:`, safeEmbellishmentOptions.map(e => e.toLowerCase()));
+    if (safeEmbellishmentOptions.length > 0) {
+      const matchedEmbellishment = safeEmbellishmentOptions.find(
+        (emb: string) => emb.trim().toLowerCase() === remainingParts.toLowerCase()
+      );
+      if (matchedEmbellishment) {
+        result.embellishments = matchedEmbellishment;
+        console.log('✅ Embellishment match found:', matchedEmbellishment);
+      } else {
+        console.log('❌ Embellishment NOT matched for:', remainingParts);
+      }
+    } else {
+      console.log('⚠️ No embellishments available to match');
     }
   }
 
@@ -260,7 +283,18 @@ export default function Inventory() {
       }
     };
     initializeDropdowns();
-  }, [seedDefaultOptions])
+  }, [seedDefaultOptions]);
+
+  // ✅ DEBUG: Log fabric and embellishment options when they load
+  useEffect(() => {
+    console.log('📊 Dropdown Options Status:', {
+      fabricOptions: fabricOptions,
+      fabricOptionsCount: fabricOptions?.length || 0,
+      embellishmentOptions: embellishmentOptions,
+      embellishmentOptionsCount: embellishmentOptions?.length || 0,
+      timestamp: new Date().toLocaleTimeString(),
+    });
+  }, [fabricOptions, embellishmentOptions]);
 
   // ✅ COMPREHENSIVE Debug Logging - Step by step analysis
   useEffect(() => {
@@ -1831,6 +1865,14 @@ export default function Inventory() {
                         value={newProduct.name}
                         onChange={(e) => {
                           const nameValue = e.target.value;
+                          
+                          // DEBUG: Show raw arrays at this point
+                          console.log('📦 Raw Arrays:', {
+                            fabricOptions: fabricOptions,
+                            embellishmentOptions: embellishmentOptions,
+                            fabricType: typeof fabricOptions,
+                            embellishmentType: typeof embellishmentOptions,
+                          });
                           
                           // ✅ Auto-parse product name for category, fabric, embellishment
                           const parsed = parseProductNameForAutoFill(nameValue, categories, fabricOptions, embellishmentOptions);
