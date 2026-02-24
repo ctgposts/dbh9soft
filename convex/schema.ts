@@ -1672,9 +1672,23 @@ const applicationTables = {
     .index("by_product", ["productId"])
     .index("by_color", ["color"])
     .index("by_barcode", ["variantBarcode"]),
+
+  // ✅ Fabric Options - Dropdown management
+  fabricOptions: defineTable({
+    name: v.string(), // "Crepe", "Chiffon", "Jersey", etc.
+    nameLower: v.string(), // For case-insensitive search
+    createdAt: v.number(),
+  })
+    .index("by_name_lower", ["nameLower"]),
+
+  // ✅ Embellishment Options - Dropdown management
+  embellishmentOptions: defineTable({
+    name: v.string(), // "Embroidered", "Beaded", "Lace", "Plain", etc.
+    nameLower: v.string(), // For case-insensitive search
+    createdAt: v.number(),
+  })
+    .index("by_name_lower", ["nameLower"]),
 };
-
-
 
 export default defineSchema({
   ...authTables,

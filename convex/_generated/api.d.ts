@@ -19,6 +19,7 @@ import type * as dashboard from "../dashboard.js";
 import type * as dataSyncVerification from "../dataSyncVerification.js";
 import type * as discountUtils from "../discountUtils.js";
 import type * as discounts from "../discounts.js";
+import type * as dropdownOptions from "../dropdownOptions.js";
 import type * as email from "../email.js";
 import type * as emailSetupGuide from "../emailSetupGuide.js";
 import type * as employees from "../employees.js";
@@ -70,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   dataSyncVerification: typeof dataSyncVerification;
   discountUtils: typeof discountUtils;
   discounts: typeof discounts;
+  dropdownOptions: typeof dropdownOptions;
   email: typeof email;
   emailSetupGuide: typeof emailSetupGuide;
   employees: typeof employees;

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
+import { EditableCombobox } from "./EditableCombobox";
 
 interface ProductVariant {
   id: string; // Unique identifier for variant
@@ -27,17 +28,15 @@ const generateNextModelNumber = (existingProducts: any[]) => {
   const currentYear = new Date().getFullYear();
   const prefix = `RD-${currentYear}-`;
   
-  // Find all model numbers with current year prefix
-  const currentYearModels = existingProducts
-    .filter(p => p.model && p.model.startsWith(prefix))
-    .map(p => {
+  // ✅ FIX #9: Optimize with reduce instead of multiple iterations
+  const maxNumber = existingProducts
+    .filter(p => p?.model && p.model.startsWith(prefix))
+    .reduce((max, p) => {
       const match = p.model.match(/RD-\d{4}-(\d{4})/);
-      return match ? parseInt(match[1]) : 0;
-    })
-    .filter(num => !isNaN(num));
+      const num = match ? parseInt(match[1]) : 0;
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
   
-  // Get the highest number and increment
-  const maxNumber = currentYearModels.length > 0 ? Math.max(...currentYearModels) : 0;
   const nextNumber = maxNumber + 1;
   
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
@@ -108,20 +107,21 @@ const compressImage = (file: File, quality: number = 0.7, maxWidth: number = 120
 };
 
 // Function to auto-generate product name from Category + Fabric + Embellishments
-const generateProductName = (categoryId: string, fabric: string, embellishments: string, categories: any[]): string => {
-  if (!fabric || !embellishments) {
+const generateProductName = (categoryId: string | undefined, fabric: string | undefined, embellishments: string | undefined, categories: any[]): string => {
+  // ✅ FIX #1: Add null/undefined checks and trim validation
+  if (!fabric?.trim() || !embellishments?.trim()) {
     return "";
   }
   
   // Get category name from categoryId (optional)
   let categoryName = "";
   if (categoryId) {
-    const category = categories.find(c => c._id === categoryId);
-    categoryName = category ? category.name : "";
+    const category = categories?.find?.(c => c?._id === categoryId);
+    categoryName = category?.name?.trim() || "";
   }
   
   // Combine: Category Name (if exists) + Fabric + Embellishments
-  const parts = [categoryName, fabric, embellishments].filter(part => part.trim());
+  const parts = [categoryName, fabric?.trim(), embellishments?.trim()].filter(part => part && part.length > 0);
   return parts.join(" ");
 };
 
@@ -181,6 +181,8 @@ export default function Inventory() {
   // Using new getAllProducts query to bypass Convex default 20-item limit
   const products = useQuery(api.products.getAllProducts, {}) || [];
   const categories = useQuery(api.categories.list) || [];
+  const fabricOptions = useQuery(api.dropdownOptions.getFabricOptions) || [];
+  const embellishmentOptions = useQuery(api.dropdownOptions.getEmbellishmentOptions) || [];
   const addProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
   const deleteProduct = useMutation(api.products.remove);
@@ -425,13 +427,27 @@ export default function Inventory() {
   // Memoized filtered and sorted products for optimal performance
   const filteredProducts = useMemo(() => {
     // Load serial and variant data from localStorage for search
-    const serialNumberMapStr = localStorage.getItem("productSerialNumbers") || "{}";
-    const variantMapStr = localStorage.getItem("variantMap") || "{}";
-    const productVariantsStr = localStorage.getItem("productVariants") || "{}";
+    // ✅ FIX #2 & #8: Add try-catch for localStorage operations
+    let serialNumberMap = new Map<string, string>();
+    let variantMap = new Map<string, number>();
+    let productVariants = new Map<string, number>();
     
-    const serialNumberMap = new Map<string, string>(Object.entries(JSON.parse(serialNumberMapStr)));
-    const variantMap = new Map<string, number>(Object.entries(JSON.parse(variantMapStr)));
-    const productVariants = new Map<string, number>(Object.entries(JSON.parse(productVariantsStr)));
+    try {
+      const serialNumberMapStr = localStorage.getItem("productSerialNumbers") || "{}";
+      const variantMapStr = localStorage.getItem("variantMap") || "{}";
+      const productVariantsStr = localStorage.getItem("productVariants") || "{}";
+      
+      serialNumberMap = new Map<string, string>(Object.entries(JSON.parse(serialNumberMapStr)));
+      variantMap = new Map<string, number>(Object.entries(JSON.parse(variantMapStr)));
+      productVariants = new Map<string, number>(Object.entries(JSON.parse(productVariantsStr)));
+    } catch (error) {
+      console.warn('Failed to load localStorage data:', error);
+    }
+    
+    // ✅ FIX #4: Add null check for products array
+    if (!products || products.length === 0) {
+      return [];
+    }
     
     let filtered = products.filter(product => {
       const searchLower = searchTerm.toLowerCase();
@@ -501,13 +517,18 @@ export default function Inventory() {
       return matchesSearch && matchesCategory && matchesBrand && matchesFabric && matchesColor && matchesOccasion && matchesStockStatus && matchesPrice && matchesInactiveProductFilter;
     });
 
-    // Sort products
-    filtered.sort((a, b) => {
+    // ✅ FIX #5 & #6: Fix sort comparison and avoid array mutation
+    const sorted = [...filtered].sort((a, b) => {
       let aValue: any = a[sortBy as keyof typeof a];
       let bValue: any = b[sortBy as keyof typeof b];
       
-      if (aValue === undefined) aValue = "";
-      if (bValue === undefined) bValue = "";
+      if (aValue === undefined || aValue === null) aValue = "";
+      if (bValue === undefined || bValue === null) bValue = "";
+      
+      // ✅ FIX #5: Handle numeric comparison properly (for _creationTime, currentStock, sellingPrice)
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+      }
       
       if (typeof aValue === 'string') aValue = aValue.toLowerCase();
       if (typeof bValue === 'string') bValue = bValue.toLowerCase();
@@ -519,7 +540,7 @@ export default function Inventory() {
       }
     });
 
-    return filtered;
+    return sorted;
   }, [products, searchTerm, filterCategory, filterBrand, filterFabric, filterColor, filterOccasion, sortBy, sortOrder, stockStatus, minPrice, maxPrice, showInactiveProducts]);
 
   // Optimized callback functions
@@ -561,13 +582,16 @@ export default function Inventory() {
       }
 
       // Price validation
-      if (newProduct.costPrice <= 0) {
-        toast.error("Cost price must be greater than 0");
+      const costPriceNum = typeof newProduct.costPrice === 'string' ? parseFloat(newProduct.costPrice) : newProduct.costPrice;
+      const sellingPriceNum = typeof newProduct.sellingPrice === 'string' ? parseFloat(newProduct.sellingPrice) : newProduct.sellingPrice;
+      
+      if (isNaN(costPriceNum) || costPriceNum <= 0) {
+        toast.error("Cost price must be a valid number greater than 0");
         return;
       }
       // ✅ OPTIONAL: Selling price can be 0 or empty, but if provided must be >= cost price
-      if (newProduct.sellingPrice > 0 && newProduct.sellingPrice < newProduct.costPrice) {
-        toast.error(`Selling price (৳${newProduct.sellingPrice}) cannot be less than cost price (৳${newProduct.costPrice})`);
+      if (!isNaN(sellingPriceNum) && sellingPriceNum > 0 && sellingPriceNum < costPriceNum) {
+        toast.error(`Selling price (৳${sellingPriceNum}) cannot be less than cost price (৳${costPriceNum})`);
         return;
       }
 
@@ -653,8 +677,8 @@ export default function Inventory() {
           sizes: [variant.size],
           embellishments: newProduct.embellishments,
           occasion: newProduct.occasion,
-          costPrice: newProduct.costPrice,
-          sellingPrice: newProduct.sellingPrice,
+          costPrice: costPriceNum,
+          sellingPrice: sellingPriceNum || 0,
           barcode: truncatedBarcode,
           productCode: variantCode,
           madeBy: newProduct.madeBy,
@@ -687,6 +711,7 @@ export default function Inventory() {
         barcode: "",
         productCode: "",
         madeBy: "U.A.E",
+        stockLocation: "",
         minStockLevel: 0,
         maxStockLevel: 100,
         description: "",
@@ -967,8 +992,29 @@ export default function Inventory() {
                             }
                             
                             try {
-                              // ✅ Use provided categoryId or default to first category
+                              // ✅ FIX #3 & #10: Better CSV validation
                               const categoryId = productData.categoryid || defaultCategory;
+                              
+                              // ✅ FIX #3: Proper sizes array handling
+                              const sizesArray = (productData.sizes || '')
+                                .split(';')
+                                .map((s: string) => s?.trim?.())
+                                .filter((s: string) => s && s.length > 0);
+                              
+                              if (sizesArray.length === 0) {
+                                console.warn(`Row ${i}: No valid sizes found, skipping`);
+                                continue;
+                              }
+                              
+                              // ✅ FIX #10: Proper price validation
+                              const costPriceValue = parseFloat(productData.costprice);
+                              const sellingPriceValue = parseFloat(productData.sellingprice);
+                              const costPrice = !isNaN(costPriceValue) && costPriceValue > 0 ? costPriceValue : 100;
+                              const sellingPrice = !isNaN(sellingPriceValue) && sellingPriceValue >= 0 ? sellingPriceValue : 0;
+                              
+                              const currentStockValue = parseInt(productData.currentstock);
+                              const minStockValue = parseInt(productData.minstocklevel);
+                              const maxStockValue = parseInt(productData.maxstocklevel);
                               
                               await addProduct({
                                 name: productData.name.trim(),
@@ -976,12 +1022,12 @@ export default function Inventory() {
                                 categoryId: categoryId,
                                 fabric: productData.fabric?.trim() || 'Jersey',
                                 color: productData.color?.trim() || 'Black',
-                                sizes: (productData.sizes || '').split(';').filter((s: string) => s?.trim()),
-                                costPrice: Math.max(0, parseFloat(productData.costprice) || 100),
-                                sellingPrice: Math.max(0, parseFloat(productData.sellingprice) || 0),
-                                currentStock: Math.max(0, parseInt(productData.currentstock) || 0),
-                                minStockLevel: Math.max(0, parseInt(productData.minstocklevel) || 0),
-                                maxStockLevel: Math.max(1, parseInt(productData.maxstocklevel) || 100),
+                                sizes: sizesArray,
+                                costPrice: Math.max(0, costPrice),
+                                sellingPrice: Math.max(0, sellingPrice),
+                                currentStock: Math.max(0, !isNaN(currentStockValue) ? currentStockValue : 0),
+                                minStockLevel: Math.max(0, !isNaN(minStockValue) ? minStockValue : 0),
+                                maxStockLevel: Math.max(1, !isNaN(maxStockValue) ? maxStockValue : 100),
                                 barcode: productData.barcode?.trim() || generateRandomPrefix(),
                                 productCode: productData.productcode?.trim() || generateRandomPrefix(),
                                 isActive: productData.isactive !== 'false',
@@ -1416,7 +1462,7 @@ export default function Inventory() {
                       product.currentStock === 0 ? 'grayscale' : ''
                     }`}
                     loading="lazy"
-                    onClick={() => setImageModalUrl(product.pictureUrl)}
+                    onClick={() => product.pictureUrl && setImageModalUrl(product.pictureUrl)}
                   />
                   {product.currentStock === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -1501,7 +1547,6 @@ export default function Inventory() {
                           madeBy: product.madeBy?.trim(),
                           stockLocation: product.stockLocation?.trim(),
                           pictureUrl: product.pictureUrl?.trim(),
-                          currentStock: newStock,
                           minStockLevel: product.minStockLevel,
                           maxStockLevel: product.maxStockLevel,
                           description: product.description?.trim(),
@@ -1540,7 +1585,6 @@ export default function Inventory() {
                           madeBy: product.madeBy?.trim(),
                           stockLocation: product.stockLocation?.trim(),
                           pictureUrl: product.pictureUrl?.trim(),
-                          currentStock: newStock,
                           minStockLevel: product.minStockLevel,
                           maxStockLevel: product.maxStockLevel,
                           description: product.description?.trim(),
@@ -1611,17 +1655,25 @@ export default function Inventory() {
             {/* Zoom Controls */}
             <div className="absolute top-2 left-2 bg-white bg-opacity-90 rounded-lg p-2 flex items-center gap-2 z-10">
               <button
-                onClick={() => setImageZoomLevel(prev => Math.max(0.5, prev - 0.2))}
+                onClick={() => setImageZoomLevel(prev => {
+                  // ✅ FIX #7: Proper zoom constraint
+                  const newZoom = Math.max(0.5, prev - 0.2);
+                  return Math.min(3, Math.max(0.5, newZoom));
+                })}
                 className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
                 title="Zoom Out"
               >
                 −
               </button>
               <span className="text-sm font-medium min-w-[60px] text-center">
-                {Math.round(imageZoomLevel * 100)}%
+                {Math.round(Math.max(50, Math.min(300, imageZoomLevel * 100)))}%
               </span>
               <button
-                onClick={() => setImageZoomLevel(prev => Math.min(3, prev + 0.2))}
+                onClick={() => setImageZoomLevel(prev => {
+                  // ✅ FIX #7: Proper zoom constraint
+                  const newZoom = Math.min(3, prev + 0.2);
+                  return Math.min(3, Math.max(0.5, newZoom));
+                })}
                 className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
                 title="Zoom In"
               >
@@ -1641,10 +1693,11 @@ export default function Inventory() {
               className="flex-1 overflow-auto flex items-center justify-center bg-black bg-opacity-50 rounded-lg"
               onWheel={(e) => {
                 e.preventDefault();
+                // ✅ FIX #7: Constrain zoom level properly
                 const newZoom = e.deltaY > 0 
                   ? Math.max(0.5, imageZoomLevel - 0.1)
                   : Math.min(3, imageZoomLevel + 0.1);
-                setImageZoomLevel(newZoom);
+                setImageZoomLevel(Math.min(3, Math.max(0.5, newZoom)));
               }}
             >
               <img
@@ -1731,36 +1784,16 @@ export default function Inventory() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Fabric *
                       </label>
-                      <select
+                      <EditableCombobox
                         value={newProduct.fabric}
-                        onChange={(e) => setNewProduct({...newProduct, fabric: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                      >
-                        <option value="">Select Fabric</option>
-                        <option value="Crepe">Crepe</option>
-                        <option value="Chiffon">Chiffon</option>
-                        <option value="Georgette">Georgette</option>
-                        <option value="Nida">Nida</option>
-                        <option value="Jersey">Jersey</option>
-                        <option value="Silk">Silk</option>
-                        <option value="Cotton">Cotton</option>
-                        <option value="Polyester">Polyester</option>
-                        <option value="ZOOM">ZOOM</option>
-                        <option value="CEY">CEY</option>
-                        <option value="ORGANJA">ORGANJA</option>
-                        <option value="POKA">POKA</option>
-                        <option value="AROWA">AROWA</option>
-                        <option value="TICTOC">TICTOC</option>
-                        <option value="PRINT">PRINT</option>
-                        <option value="BABLA">BABLA</option>
-                        <option value="BELVET">BELVET</option>
-                        <option value="LILEN">LILEN</option>
-                        <option value="KASMIRI">KASMIRI</option>
-                        <option value="FAKRU PRINT">FAKRU PRINT</option>
-                        <option value="KORIYAN SIMAR">KORIYAN SIMAR</option>
-                        <option value="JORI SHIPON">JORI SHIPON</option>
-						<option value="BELVET">BELVET</option>
-                      </select>
+                        onChange={(value) => setNewProduct({...newProduct, fabric: value})}
+                        options={fabricOptions.map((f: any) => f.name)}
+                        type="fabric"
+                        placeholder="Select or type fabric..."
+                        onNewOptionAdded={() => {
+                          // Refetch fabric options (will happen automatically via query)
+                        }}
+                      />
                     </div>
 
                     <div>
@@ -1785,44 +1818,16 @@ export default function Inventory() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Embellishments
                       </label>
-                      <select
+                      <EditableCombobox
                         value={newProduct.embellishments}
-                        onChange={(e) => setNewProduct({...newProduct, embellishments: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                      >
-                        <option value="">Select Embellishments</option>
-                        <option value="Plain">Plain</option>
-                        <option value="Embroidered">Embroidered</option>
-                        <option value="Beaded">Beaded</option>
-                        <option value="Lace">Lace</option>
-                        <option value="Sequined">Sequined</option>
-                        <option value="Stone Work">Stone Work</option>
-                        <option value="HAND WORK">HAND WORK</option>
-                        <option value="ARI WORK">ARI WORK</option>
-                        <option value="CREP Work">CREP Work</option>
-                        <option value="BeadSton">BeadSton</option>
-                        <option value="LaceSton">LaceSton</option>
-                        <option value="EmbroStone">EmbroStone</option>
-                        <option value="AriStone">AriStone</option>
-                        <option value="HandSton">HandSton</option>
-                        <option value="CrepStone">CrepStone</option>
-                        <option value="SeqenStone">SeqenStone</option>
-                        <option value="StoneFbody">StoneFbody</option>
-                        <option value="StoneHbody">StoneHbody</option>
-                        <option value="Stonehand">Stonehand</option>
-                        <option value="StoneBack">StoneBack</option>
-                        <option value="AriHbody">AriHbody</option>
-                        <option value="AriFBoday">AriFBoday</option>
-                        <option value="Arihand">Arihand</option>
-                        <option value="AriFront">AriFront</option>
-                        <option value="AriBack">AriBack</option>
-                        <option value="EmbroFBody">EmbroFBody</option>
-                        <option value="EmbroHbody">EmbroHbody</option>
-                        <option value="EmbroHand">EmbroHand</option>
-                        <option value="EmbroFront">EmbroFront</option>
-						<option value="BelvetStone">BelvetStone</option>
-						<option value="Belvet">Belvet</option>
-                      </select>
+                        onChange={(value) => setNewProduct({...newProduct, embellishments: value})}
+                        options={embellishmentOptions.map((e: any) => e.name)}
+                        type="embellishment"
+                        placeholder="Select or type embellishment..."
+                        onNewOptionAdded={() => {
+                          // Refetch embellishment options (will happen automatically via query)
+                        }}
+                      />
                     </div>
 
                     <div>
@@ -2268,15 +2273,15 @@ export default function Inventory() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">ফ্যাব্রিক *</label>
                     <div className="relative">
-                      <input
-                        type="text"
+                      <EditableCombobox
                         value={editingProduct.fabric || ""}
-                        onChange={(e) => setEditingProduct({...editingProduct, fabric: e.target.value})}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${
-                          getFieldError('fabric') 
-                            ? 'border-red-400 focus:ring-red-500 bg-red-50' 
-                            : 'border-gray-300 focus:ring-green-500'
-                        }`}
+                        onChange={(value) => setEditingProduct({...editingProduct, fabric: value})}
+                        options={fabricOptions.map((f: any) => f.name)}
+                        type="fabric"
+                        placeholder="Select or type fabric..."
+                        onNewOptionAdded={() => {
+                          // Refetch fabric options (will happen automatically via query)
+                        }}
                       />
                       {getFieldError('fabric') && (
                         <div className="absolute right-2 top-2 text-red-500 text-lg">⚠️</div>
@@ -2331,11 +2336,15 @@ export default function Inventory() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">সজ্জা</label>
-                    <input
-                      type="text"
+                    <EditableCombobox
                       value={editingProduct.embellishments || ""}
-                      onChange={(e) => setEditingProduct({...editingProduct, embellishments: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                      onChange={(value) => setEditingProduct({...editingProduct, embellishments: value})}
+                      options={embellishmentOptions.map((e: any) => e.name)}
+                      type="embellishment"
+                      placeholder="Select or type embellishment..."
+                      onNewOptionAdded={() => {
+                        // Refetch embellishment options (will happen automatically via query)
+                      }}
                     />
                   </div>
 
@@ -2779,7 +2788,7 @@ function BarcodeAuditPanel({ products }: { products: any[] }) {
         <div className="bg-red-50 border border-red-300 rounded-lg p-6">
           <h2 className="text-xl font-bold text-red-700 mb-4">❌ বারকোড ছাড়া প্রোডাক্ট ({withoutBarcode})</h2>
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {productsWithoutBarcode.map((product, idx) => (
+            {productsWithoutBarcode.map((product: any, idx: number) => (
               <div key={idx} className="bg-white p-3 rounded border border-red-200 text-sm">
                 <p className="font-semibold text-gray-900">{product.name}</p>
                 <p className="text-gray-600">ব্র্যান্ড: {product.brand} | দাম: ৳{product.price}</p>
@@ -2794,12 +2803,12 @@ function BarcodeAuditPanel({ products }: { products: any[] }) {
         <div className="bg-orange-50 border border-orange-300 rounded-lg p-6">
           <h2 className="text-xl font-bold text-orange-700 mb-4">⚠️ ডিউপ্লিকেট বারকোড ({duplicateBarcodes.length})</h2>
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {duplicateBarcodes.map((dup, idx) => (
+            {duplicateBarcodes.map((dup: any, idx: number) => (
               <div key={idx} className="bg-white p-3 rounded border border-orange-200">
                 <p className="font-semibold text-gray-900">বারকোড: <code className="bg-gray-200 px-2 py-1 rounded">{dup.barcode}</code></p>
                 <p className="text-sm text-gray-600 mt-1">প্রোডাক্ট সংখ্যা: {dup.products.length}</p>
                 <ul className="mt-2 space-y-1">
-                  {dup.products.map((prod, pidx) => (
+                  {dup.products.map((prod: string, pidx: number) => (
                     <li key={pidx} className="text-sm text-gray-700">• {prod}</li>
                   ))}
                 </ul>
