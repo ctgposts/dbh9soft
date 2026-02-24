@@ -187,7 +187,21 @@ export default function Inventory() {
   const updateProduct = useMutation(api.products.update);
   const deleteProduct = useMutation(api.products.remove);
   const addCategory = useMutation(api.categories.create);
+  const seedDefaultOptions = useMutation(api.dropdownOptions.seedDefaultOptions);
   const autoAssignBoxNumbers = useMutation(api.products.autoAssignBoxNumbers);
+
+  // ✅ Seed default options on component mount
+  useEffect(() => {
+    const initializeDropdowns = async () => {
+      try {
+        await seedDefaultOptions();
+        console.log("✅ Default dropdown options seeded successfully");
+      } catch (error) {
+        console.log("ℹ️ Dropdowns already initialized or seeding skipped");
+      }
+    };
+    initializeDropdowns();
+  }, [seedDefaultOptions])
 
   // ✅ COMPREHENSIVE Debug Logging - Step by step analysis
   useEffect(() => {

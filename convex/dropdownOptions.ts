@@ -119,3 +119,62 @@ export const getAllCategories = query({
     return await ctx.db.query("categories").order("asc").collect();
   },
 });
+
+// ✅ Seed default fabric and embellishment options (called once on app init)
+export const seedDefaultOptions = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const defaultFabrics = [
+      "Crepe", "Chiffon", "Georgette", "Nida", "Jersey", "Silk", "Cotton",
+      "Polyester", "ZOOM", "CEY", "ORGANJA", "POKA", "AROWA", "TICTOC",
+      "PRINT", "BABLA", "BELVET", "LILEN", "KASMIRI", "FAKRU PRINT",
+      "KORIYAN SIMAR", "JORI SHIPON"
+    ];
+
+    const defaultEmbellishments = [
+      "Plain", "Embroidered", "Beaded", "Lace", "Sequined", "Stone Work",
+      "HAND WORK", "ARI WORK", "CREP Work", "BeadSton", "LaceSton",
+      "EmbroStone", "AriStone", "HandSton", "CrepStone", "SeqenStone",
+      "StoneFbody", "StoneHbody", "Stonehand", "StoneBack", "AriHbody",
+      "AriFBoday", "Arihand", "AriFront", "AriBack", "EmbroFBody",
+      "EmbroHbody", "EmbroHand", "EmbroFront", "BelvetStone", "Belvet"
+    ];
+
+    // Check if already seeded
+    const existingFabrics = await ctx.db.query("fabricOptions").collect();
+    const existingEmbellishments = await ctx.db.query("embellishmentOptions").collect();
+
+    let fabricsAdded = 0;
+    let embellishmentsAdded = 0;
+
+    // Add fabrics if not already present
+    if (existingFabrics.length === 0) {
+      for (const fabric of defaultFabrics) {
+        await ctx.db.insert("fabricOptions", {
+          name: fabric,
+          nameLower: fabric.toLowerCase(),
+          createdAt: Date.now(),
+        });
+        fabricsAdded++;
+      }
+    }
+
+    // Add embellishments if not already present
+    if (existingEmbellishments.length === 0) {
+      for (const embellishment of defaultEmbellishments) {
+        await ctx.db.insert("embellishmentOptions", {
+          name: embellishment,
+          nameLower: embellishment.toLowerCase(),
+          createdAt: Date.now(),
+        });
+        embellishmentsAdded++;
+      }
+    }
+
+    return {
+      fabricsAdded,
+      embellishmentsAdded,
+      message: `Seeded ${fabricsAdded} fabrics and ${embellishmentsAdded} embellishments`,
+    };
+  },
+});
