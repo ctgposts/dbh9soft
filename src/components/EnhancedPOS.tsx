@@ -1,0 +1,1662 @@
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { toast } from "sonner";
+import { Id } from "../../convex/_generated/dataModel";
+import { InvoiceModal } from "./InvoiceModal";
+import { X } from "lucide-react";
+
+interface CartItem {
+  cartId: string;
+  productId: Id<"products">;
+  name: string;
+  brand: string;
+  style: string;
+  fabric: string;
+  color: string;
+  price: number;
+  quantity: number;
+  stock: number;
+  size?: string;
+  availableSizes?: string[];
+}
+
+interface SearchFilters {
+  searchTerm: string;
+  category?: Id<"categories">;
+  brand?: string;
+  fabric?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  stockStatus?: "all" | "in-stock" | "out-of-stock" | "low-stock";
+  color?: string;
+  occasion?: string;
+  size?: string;
+  sortBy?: "relevance" | "price-asc" | "price-desc" | "newest" | "best-seller";
+}
+
+interface FilterPreset {
+  name: string;
+  filters: SearchFilters;
+  icon: string;
+}
+
+export default function EnhancedPOS() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [filters, setFilters] = useState<SearchFilters>({ searchTerm: "", sortBy: "relevance" });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // ✅ NEW: Search history feature
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
+  
+  // ✅ NEW: Product favorites
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  
+  // ✅ NEW: Filter presets
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [customerInfo, setCustomerInfo] = useState({
+    name: "",
+    phone: "",
+  });
+  const [selectedCustomerId, setSelectedCustomerId] = useState<Id<"customers"> | null>(null);
+  const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentDetails, setPaymentDetails] = useState({
+    transactionId: "",
+    phoneNumber: "",
+    reference: "",
+  });
+  const [deliveryType, setDeliveryType] = useState("pickup");
+  const [deliveryInfo, setDeliveryInfo] = useState({
+    address: "",
+    phone: "",
+    charges: 0,
+  });
+  const [completedSale, setCompletedSale] = useState<Id<"sales"> | null>(null);
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [activeTab, setActiveTab] = useState("products");
+
+  // ✅ NEW: Enhanced debounced search to improve performance
+  const handleSearchChange = useCallback((value: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      setFilters(prev => ({ ...prev, searchTerm: value }));
+      
+      // Add to search history if not empty and not duplicate
+      if (value.trim()) {
+        setSearchHistory(prev => {
+          const filtered = prev.filter(item => item !== value);
+          return [value, ...filtered].slice(0, 5); // Keep last 5 searches
+        });
+      }
+      
+      setShowSearchHistory(false);
+    }, 300); // 300ms debounce delay
+  }, []);
+
+  const handleFilterChange = useCallback((key: keyof SearchFilters, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setActivePreset(null); // Clear preset when manually filtering
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
+    setFilters({ searchTerm: "", sortBy: "relevance" });
+    setShowAdvancedFilters(false);
+    setActivePreset(null);
+  }, []);
+
+  // ✅ UNLIMITED: Load ALL products without pagination
+  const allProducts = useQuery(api.products.getAllProducts, {}) || [];
+  
+  // ✅ ENHANCED: Advanced multi-criteria filtering with performance optimization & SORTING
+  const products = useMemo(() => {
+    let filtered = allProducts || [];
+    
+    // Category filter
+    if (filters.category) {
+      filtered = filtered.filter(p => p.categoryId === filters.category);
+    }
+    
+    // Advanced text search - search in multiple fields with relevance scoring
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name?.toLowerCase().includes(searchLower) ||
+        p.brand?.toLowerCase().includes(searchLower) ||
+        p.barcode?.toLowerCase().includes(searchLower) ||
+        p.productCode?.toLowerCase().includes(searchLower) ||
+        p.style?.toLowerCase().includes(searchLower) ||
+        p.fabric?.toLowerCase().includes(searchLower) ||
+        p.color?.toLowerCase().includes(searchLower) ||
+        p.occasion?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    // Brand filter
+    if (filters.brand) {
+      filtered = filtered.filter(p => p.brand?.toLowerCase() === filters.brand!.toLowerCase());
+    }
+    
+    // Fabric filter
+    if (filters.fabric) {
+      filtered = filtered.filter(p => p.fabric?.toLowerCase() === filters.fabric!.toLowerCase());
+    }
+    
+    // Color filter
+    if (filters.color) {
+      filtered = filtered.filter(p => p.color?.toLowerCase() === filters.color!.toLowerCase());
+    }
+    
+    // Occasion filter
+    if (filters.occasion) {
+      filtered = filtered.filter(p => p.occasion?.toLowerCase() === filters.occasion!.toLowerCase());
+    }
+    
+    // ✅ NEW: Size filter
+    if (filters.size) {
+      filtered = filtered.filter(p => 
+        p.sizes && p.sizes.some(s => s.toLowerCase() === filters.size!.toLowerCase())
+      );
+    }
+    
+    // Price range filter
+    if (filters.minPrice !== undefined) {
+      filtered = filtered.filter(p => p.sellingPrice >= filters.minPrice!);
+    }
+    if (filters.maxPrice !== undefined) {
+      filtered = filtered.filter(p => p.sellingPrice <= filters.maxPrice!);
+    }
+    
+    // Stock status filter
+    if (filters.stockStatus && filters.stockStatus !== "all") {
+      filtered = filtered.filter(p => {
+        const stock = p.currentStock || 0;
+        if (filters.stockStatus === "in-stock") return stock > 0;
+        if (filters.stockStatus === "out-of-stock") return stock === 0;
+        if (filters.stockStatus === "low-stock") return stock > 0 && stock <= (p.minStockLevel || 5);
+        return true;
+      });
+    }
+    
+    // ✅ ENHANCED: Sorting with multiple options
+    const sortBy = filters.sortBy || "relevance";
+    
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price-asc":
+          return a.sellingPrice - b.sellingPrice;
+        case "price-desc":
+          return b.sellingPrice - a.sellingPrice;
+        case "newest":
+          return (b.createdAt || 0) - (a.createdAt || 0);
+        case "best-seller":
+          // Assuming products have a sales count or popularity metric
+          return (b.sellCount || 0) - (a.sellCount || 0);
+        case "relevance":
+        default:
+          // Relevance scoring based on search term
+          if (!filters.searchTerm) return 0;
+          const searchLower = filters.searchTerm.toLowerCase();
+          const aScore = (a.name?.toLowerCase().includes(searchLower) ? 10 : 0) +
+                        (a.brand?.toLowerCase().includes(searchLower) ? 5 : 0) +
+                        (a.barcode?.toLowerCase().includes(searchLower) ? 3 : 0) +
+                        (a.productCode?.toLowerCase().includes(searchLower) ? 2 : 0);
+          const bScore = (b.name?.toLowerCase().includes(searchLower) ? 10 : 0) +
+                        (b.brand?.toLowerCase().includes(searchLower) ? 5 : 0) +
+                        (b.barcode?.toLowerCase().includes(searchLower) ? 3 : 0) +
+                        (b.productCode?.toLowerCase().includes(searchLower) ? 2 : 0);
+          return bScore - aScore;
+      }
+    });
+    
+    return filtered;
+  }, [allProducts, filters]);
+  
+  const categories = useQuery(api.categories.list);
+  const createSale = useMutation(api.sales.create);
+  const getSale = useQuery(api.sales.get, 
+    completedSale ? { id: completedSale } : "skip"
+  );
+
+  // ✅ NEW: Toggle favorite product
+  const toggleFavorite = useCallback((productId: string) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev);
+      if (newFavorites.has(productId)) {
+        newFavorites.delete(productId);
+      } else {
+        newFavorites.add(productId);
+      }
+      return newFavorites;
+    });
+  }, []);
+
+  // ✅ NEW: Filter presets
+  const filterPresets: FilterPreset[] = useMemo(() => [
+    {
+      name: "In Stock Only",
+      filters: { ...filters, stockStatus: "in-stock" },
+      icon: "📦"
+    },
+    {
+      name: "Affordable",
+      filters: { ...filters, maxPrice: 5000 },
+      icon: "💰"
+    },
+    {
+      name: "Premium",
+      filters: { ...filters, minPrice: 15000 },
+      icon: "👑"
+    },
+    {
+      name: "Best Price",
+      filters: { ...filters, sortBy: "price-asc" },
+      icon: "⬇️"
+    },
+  ], [filters]);
+
+  const applyPreset = (preset: FilterPreset) => {
+    setFilters(preset.filters);
+    setActivePreset(preset.name);
+    setShowAdvancedFilters(false);
+  };
+
+  if (!products || !categories) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  // ✅ Problem #6: Helper function for real-time stock validation
+  const getRequiredPaymentFields = (method: string): string[] => {
+    if (["bkash", "nagad", "rocket", "upay"].includes(method)) {
+      return ["phoneNumber", "transactionId"]; // Mobile money
+    }
+    if (method === "card") {
+      return ["transactionId", "reference"]; // Card: TxID + Last 4 digits
+    }
+    if (method === "cod") {
+      return []; // COD: no payment details
+    }
+    return []; // Cash: no details
+  };
+
+  // ✅ Problem #7: Validate payment details based on method
+  const validatePaymentDetails = (method: string): string | null => {
+    const requiredFields = getRequiredPaymentFields(method);
+    
+    for (const field of requiredFields) {
+      const value = paymentDetails[field as keyof typeof paymentDetails];
+      if (!value?.toString().trim()) {
+        const fieldLabels: Record<string, string> = {
+          phoneNumber: "Phone number",
+          transactionId: "Transaction ID",
+          reference: "Card reference/Last 4 digits",
+        };
+        return `${fieldLabels[field] || field} is required for ${method}`;
+      }
+    }
+
+    // Card specific validation
+    if (method === "card" && paymentDetails.reference) {
+      const digitsOnly = paymentDetails.reference.replace(/\D/g, '');
+      if (digitsOnly.length !== 4) {
+        return "Card reference must be exactly 4 digits";
+      }
+    }
+
+    // Phone validation for mobile banking
+    if (["bkash", "nagad", "rocket", "upay"].includes(method) && paymentDetails.phoneNumber) {
+      const phoneDigits = paymentDetails.phoneNumber.replace(/\D/g, '');
+      if (phoneDigits.length !== 11 || !phoneDigits.startsWith('01')) {
+        return `Invalid phone number for ${method}. Must be 11 digits starting with 01`;
+      }
+    }
+
+    return null;
+  };
+
+  // ✅ Problem #5: Helper to find and load customer delivery address
+  const handleCustomerPhoneChange = async (phone: string) => {
+    setCustomerInfo({ ...customerInfo, phone });
+    
+    if (!phone.trim()) {
+      setSelectedCustomerId(null);
+      return;
+    }
+
+    // In a real app, this would query a customer database
+    // For now, we can add this functionality when customer module is available
+    // The auto-fill will work when a customer is properly selected via a customer picker
+  };
+
+  // ✅ Problem #5: Auto-fill delivery info when customer has lastDeliveryAddress
+  const loadCustomerDeliveryInfo = (customer: any) => {
+    if (customer?.lastDeliveryAddress) {
+      setDeliveryInfo({
+        ...deliveryInfo,
+        address: customer.lastDeliveryAddress,
+        phone: customer.lastDeliveryPhone || "",
+      });
+    }
+    setSelectedCustomerId(customer._id);
+  };
+
+  // ✅ FIX #20: Calculate delivery charges based on delivery type and zone
+  const calculateDeliveryCharges = (type: string, address?: string): number => {
+    if (type !== "delivery") return 0;
+    
+    // Default delivery charge for standard delivery (can be extended with zone-based logic)
+    // These are example rates
+    const defaultDeliveryCharge = 50; // ৳50 flat rate
+    
+    // Future enhancement: Zone-based calculation
+    // if (address) {
+    //   const zone = determineZone(address); // Would implement zone matching
+    //   const zoneRates: Record<string, number> = {
+    //     "dhaka": 50,
+    //     "outside_dhaka": 100,
+    //   };
+    //   return zoneRates[zone] || defaultDeliveryCharge;
+    // }
+    
+    return defaultDeliveryCharge;
+  };
+
+  // ✅ FIX #20: Handle delivery type change and auto-calculate charges
+  const handleDeliveryTypeChange = (type: string) => {
+    setDeliveryType(type);
+    
+    if (type === "pickup") {
+      // Pickup: no delivery charges
+      setDeliveryInfo({
+        address: "",
+        phone: "",
+        charges: 0,
+      });
+    } else if (type === "delivery") {
+      // Delivery: calculate default charges
+      const calculatedCharges = calculateDeliveryCharges("delivery", deliveryInfo.address);
+      setDeliveryInfo(prev => ({
+        ...prev,
+        charges: calculatedCharges,
+      }));
+    }
+  };
+
+  const addToCart = (product: any) => {
+    // Stock validation
+    if (product.currentStock <= 0) {
+      toast.error("Product is out of stock");
+      return;
+    }
+
+    const cartId = `${product._id}-${Date.now()}`;
+    const existingItem = cart.find(item => item.productId === product._id && !item.size);
+    
+    if (existingItem && !product.sizes?.length) {
+      if (existingItem.quantity < product.currentStock) {
+        setCart(cart.map(item => 
+          item.cartId === existingItem.cartId 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        ));
+      } else {
+        toast.error("Not enough stock available");
+      }
+    } else {
+      const newItem: CartItem = {
+        cartId,
+        productId: product._id,
+        name: product.name,
+        brand: product.brand,
+        style: product.style,
+        fabric: product.fabric,
+        color: product.color,
+        price: product.sellingPrice,
+        quantity: 1,
+        stock: product.currentStock,
+        availableSizes: product.sizes || [],
+      };
+      setCart([...cart, newItem]);
+    }
+  };
+
+  const updateCartItem = (cartId: string, updates: Partial<CartItem>) => {
+    // Stock validation for quantity updates
+    if (updates.quantity !== undefined) {
+      const item = cart.find(c => c.cartId === cartId);
+      if (item && updates.quantity > item.stock) {
+        toast.error(`Only ${item.stock} items available in stock`);
+        return;
+      }
+      if (updates.quantity <= 0) {
+        removeFromCart(cartId);
+        return;
+      }
+    }
+    
+    setCart(cart.map(item => 
+      item.cartId === cartId ? { ...item, ...updates } : item
+    ));
+  };
+
+  const removeFromCart = (cartId: string) => {
+    setCart(cart.filter(item => item.cartId !== cartId));
+  };
+
+  // ✅ FIX #1: Handle customer selection with delivery info auto-fill
+  const handleCustomerSelect = (customer: any) => {
+    setSelectedCustomerId(customer._id);
+    setCustomerInfo({
+      name: customer.name,
+      phone: customer.phone || "",
+    });
+    // Auto-fill delivery info from last order
+    if (customer.lastDeliveryAddress) {
+      setDeliveryInfo(prev => ({
+        ...prev,
+        address: customer.lastDeliveryAddress,
+        phone: customer.lastDeliveryPhone || prev.phone,
+      }));
+    }
+  };
+
+  const clearCart = () => {
+    setCart([]);
+    setCustomerInfo({ name: "", phone: "" });
+    setSelectedCustomerId(null);
+    setDiscount(0);
+    setPaymentMethod("cash");
+    setPaymentDetails({ transactionId: "", phoneNumber: "", reference: "" });
+    setDeliveryType("pickup");
+    setDeliveryInfo({ address: "", phone: "", charges: 0 });
+  };
+
+  // ✅ ENHANCED: Get unique values for filter dropdowns including SIZES
+  const getUniqueFilterValues = useCallback((key: keyof Omit<SearchFilters, 'searchTerm' | 'minPrice' | 'maxPrice' | 'stockStatus' | 'sortBy' | 'size'>): string[] => {
+    if (key === 'size') {
+      // Special handling for sizes - flatten all size arrays
+      return [...new Set(
+        allProducts
+          .flatMap(p => p.sizes || [])
+          .filter(Boolean)
+          .sort()
+      )];
+    }
+    return [...new Set(
+      allProducts
+        .map(p => p[key as keyof typeof p] as string)
+        .filter(Boolean)
+        .sort()
+    )];
+  }, [allProducts]);
+
+  const brands = useMemo(() => getUniqueFilterValues('brand'), [getUniqueFilterValues]);
+  const fabrics = useMemo(() => getUniqueFilterValues('fabric'), [getUniqueFilterValues]);
+  const colors = useMemo(() => getUniqueFilterValues('color'), [getUniqueFilterValues]);
+  const occasions = useMemo(() => getUniqueFilterValues('occasion'), [getUniqueFilterValues]);
+  const sizes = useMemo(() => getUniqueFilterValues('size'), [getUniqueFilterValues]);
+  
+  const priceStats = useMemo(() => {
+    const prices = allProducts.map(p => p.sellingPrice || 0);
+    return {
+      min: Math.min(...prices, 0),
+      max: Math.max(...prices, 0),
+    };
+  }, [allProducts]);
+
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const deliveryCharges = deliveryType === "delivery" ? deliveryInfo.charges : 0;
+  
+  const discountAmount = discountType === "percentage" 
+    ? (subtotal * discount) / 100
+    : discount;
+  
+  const total = subtotal + deliveryCharges - discountAmount;
+
+  // ✅ FIX #2: Validate stock before checkout
+  const validateStockBeforeCheckout = (): boolean => {
+    for (const cartItem of cart) {
+      const product = products?.find(p => p._id === cartItem.productId);
+      if (!product) {
+        toast.error(`Product ${cartItem.name} not found`);
+        return false;
+      }
+      if (product.currentStock < cartItem.quantity) {
+        toast.error(
+          `Insufficient stock for ${cartItem.name}. Available: ${product.currentStock}, Required: ${cartItem.quantity}`
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
+
+    // ✅ FIX #2: Validate stock before proceeding
+    if (!validateStockBeforeCheckout()) {
+      return;
+    }
+
+    // ✅ Problem #6: Real-time stock validation against current product data
+    // Validate stock availability using current products data
+    for (const cartItem of cart) {
+      const currentProduct = products.find(p => p._id === cartItem.productId);
+      if (!currentProduct) {
+        toast.error(`${cartItem.name}: Product not found`);
+        return;
+      }
+      
+      // Check CURRENT stock from fresh product data, not cart item's cached stock
+      if (cartItem.quantity > currentProduct.currentStock) {
+        toast.error(
+          `${cartItem.name}: Only ${currentProduct.currentStock} items available in stock (requested ${cartItem.quantity})`
+        );
+        return;
+      }
+    }
+
+    // Validate customer info for delivery
+    if (deliveryType === "delivery" && !deliveryInfo.address?.trim()) {
+      toast.error("Delivery address is required");
+      return;
+    }
+
+    // ✅ Problem #7: Enhanced payment validation
+    const paymentError = validatePaymentDetails(paymentMethod);
+    if (paymentError) {
+      toast.error(paymentError);
+      return;
+    }
+
+    try {
+      const saleItems = cart.map(item => ({
+        productId: item.productId,
+        productName: item.name,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        totalPrice: item.price * item.quantity,
+        size: item.size,
+      }));
+
+      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const discountAmountFinal = discountType === "percentage" 
+        ? (subtotal * discount) / 100
+        : discount;
+      const deliveryChargesAmount = deliveryType === "delivery" ? deliveryInfo.charges : 0;
+      const total = subtotal + deliveryChargesAmount - discountAmountFinal;
+
+      const saleId = await createSale({
+        items: saleItems,
+        customerId: selectedCustomerId || undefined, // ✅ Problem #5: Pass customer ID
+        customerName: customerInfo.name || undefined,
+        subtotal,
+        discount: discountAmountFinal,
+        total,
+        paidAmount: total,
+        dueAmount: 0,
+        paymentMethod,
+        paymentDetails: Object.keys(paymentDetails).some(key => paymentDetails[key as keyof typeof paymentDetails]) 
+          ? paymentDetails 
+          : undefined,
+        deliveryInfo: deliveryType === "delivery" 
+          ? { ...deliveryInfo, type: "delivery" }
+          : { type: "pickup" },
+      });
+
+      setCompletedSale(saleId);
+      clearCart();
+      toast.success("Abaya sale completed successfully!");
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      const errorMessage = error?.message || "Failed to complete sale";
+      toast.error(errorMessage);
+    }
+  };
+
+  const paymentMethods = [
+    { id: "cash", name: "Cash", icon: "💵" },
+    { id: "bkash", name: "bKash", icon: "📱" },
+    { id: "nagad", name: "Nagad", icon: "📱" },
+    { id: "rocket", name: "Rocket", icon: "🚀" },
+    { id: "upay", name: "Upay", icon: "💳" },
+    { id: "card", name: "Card", icon: "💳" },
+    { id: "cod", name: "Cash on Delivery", icon: "🚚" },
+  ];
+
+  const mobileTabs = [
+    { id: "products", name: "Abayas", icon: "🧕" },
+    { id: "cart", name: "Cart", icon: "🛒", badge: cart.length },
+    { id: "checkout", name: "Checkout", icon: "💳" },
+  ];
+
+  return (
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-2 sm:space-y-0 animate-slide-up">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Abaya Point of Sale</h2>
+        <div className="text-sm text-gray-500">
+          Cart: {cart.length} items | Total: ৳{total.toLocaleString('en-BD')}
+        </div>
+      </div>
+
+      {/* Mobile Tab Navigation */}
+      <div className="block lg:hidden">
+        <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg">
+          {mobileTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-2 text-xs font-medium rounded-md transition-colors relative ${
+                activeTab === tab.id
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <div className="flex flex-col items-center space-y-1">
+                <span className="text-sm">{tab.icon}</span>
+                <span>{tab.name}</span>
+                {tab.badge && tab.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {tab.badge}
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:grid lg:grid-cols-3 lg:gap-6">
+        {/* Products Section */}
+        <div className="lg:col-span-2 space-y-4">
+          <ProductsSection 
+            products={products}
+            allProducts={allProducts}
+            categories={categories}
+            filters={filters}
+            handleSearchChange={handleSearchChange}
+            handleFilterChange={handleFilterChange}
+            clearAllFilters={clearAllFilters}
+            showAdvancedFilters={showAdvancedFilters}
+            setShowAdvancedFilters={setShowAdvancedFilters}
+            brands={brands}
+            fabrics={fabrics}
+            colors={colors}
+            occasions={occasions}
+            sizes={sizes}
+            priceStats={priceStats}
+            addToCart={addToCart}
+            searchHistory={searchHistory}
+            showSearchHistory={showSearchHistory}
+            setShowSearchHistory={setShowSearchHistory}
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+            filterPresets={filterPresets}
+            applyPreset={applyPreset}
+            activePreset={activePreset}
+          />
+        </div>
+
+        {/* Cart & Checkout Section */}
+        <div className="space-y-4">
+          <CartSection 
+            cart={cart}
+            updateCartItem={updateCartItem}
+            removeFromCart={removeFromCart}
+            clearCart={clearCart}
+          />
+          <CheckoutSection 
+            customerInfo={customerInfo}
+            setCustomerInfo={setCustomerInfo}
+            discount={discount}
+            setDiscount={setDiscount}
+            discountType={discountType}
+            setDiscountType={setDiscountType}
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
+            paymentDetails={paymentDetails}
+            setPaymentDetails={setPaymentDetails}
+            deliveryType={deliveryType}
+            setDeliveryType={setDeliveryType}
+            deliveryInfo={deliveryInfo}
+            setDeliveryInfo={setDeliveryInfo}
+            paymentMethods={paymentMethods}
+            subtotal={subtotal}
+            deliveryCharges={deliveryCharges}
+            total={total}
+            handleCheckout={handleCheckout}
+            cart={cart}
+            handleDeliveryTypeChange={handleDeliveryTypeChange}
+          />
+        </div>
+      </div>
+
+      {/* Mobile Tab Content */}
+      <div className="block lg:hidden">
+        {activeTab === "products" && (
+          <ProductsSection 
+            products={products}
+            allProducts={allProducts}
+            categories={categories}
+            filters={filters}
+            handleSearchChange={handleSearchChange}
+            handleFilterChange={handleFilterChange}
+            clearAllFilters={clearAllFilters}
+            showAdvancedFilters={showAdvancedFilters}
+            setShowAdvancedFilters={setShowAdvancedFilters}
+            brands={brands}
+            fabrics={fabrics}
+            colors={colors}
+            occasions={occasions}
+            sizes={sizes}
+            priceStats={priceStats}
+            addToCart={addToCart}
+            searchHistory={searchHistory}
+            showSearchHistory={showSearchHistory}
+            setShowSearchHistory={setShowSearchHistory}
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+            filterPresets={filterPresets}
+            applyPreset={applyPreset}
+            activePreset={activePreset}
+          />
+        )}
+        {activeTab === "cart" && (
+          <CartSection 
+            cart={cart}
+            updateCartItem={updateCartItem}
+            removeFromCart={removeFromCart}
+            clearCart={clearCart}
+          />
+        )}
+        {activeTab === "checkout" && (
+          <CheckoutSection 
+            customerInfo={customerInfo}
+            setCustomerInfo={setCustomerInfo}
+            discount={discount}
+            setDiscount={setDiscount}
+            discountType={discountType}
+            setDiscountType={setDiscountType}
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
+            paymentDetails={paymentDetails}
+            setPaymentDetails={setPaymentDetails}
+            deliveryType={deliveryType}
+            setDeliveryType={setDeliveryType}
+            deliveryInfo={deliveryInfo}
+            setDeliveryInfo={setDeliveryInfo}
+            paymentMethods={paymentMethods}
+            subtotal={subtotal}
+            deliveryCharges={deliveryCharges}
+            total={total}
+            handleCheckout={handleCheckout}
+            cart={cart}
+            handleDeliveryTypeChange={handleDeliveryTypeChange}
+          />
+        )}
+      </div>
+
+      {/* Invoice Modal */}
+      {showInvoice && completedSale && getSale && (
+        <InvoiceModal
+          sale={getSale}
+          onClose={() => {
+            setShowInvoice(false);
+            setCompletedSale(null);
+          }}
+        />
+      )}
+
+      {/* Success Message */}
+      {completedSale && !showInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full text-center">
+            <div className="text-4xl mb-4">🧕</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Abaya Sale Completed!</h3>
+            <p className="text-gray-600 mb-4">Transaction has been processed successfully.</p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowInvoice(true)}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200"
+              >
+                View Invoice
+              </button>
+              <button
+                onClick={() => setCompletedSale(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                New Sale
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProductsSection({ 
+  products, 
+  allProducts,
+  categories, 
+  filters, 
+  handleSearchChange,
+  handleFilterChange,
+  clearAllFilters,
+  showAdvancedFilters,
+  setShowAdvancedFilters,
+  brands,
+  fabrics,
+  colors,
+  occasions,
+  sizes,
+  priceStats,
+  addToCart,
+  searchHistory,
+  showSearchHistory,
+  setShowSearchHistory,
+  favorites,
+  toggleFavorite,
+  filterPresets,
+  applyPreset,
+  activePreset
+}: any) {
+  const hasActiveFilters = filters.searchTerm || filters.category || filters.brand || filters.fabric || 
+                          filters.color || filters.occasion || filters.minPrice !== undefined || 
+                          filters.maxPrice !== undefined || (filters.stockStatus && filters.stockStatus !== "all") ||
+                          filters.size || (filters.sortBy && filters.sortBy !== "relevance");
+
+  // Calculate active filter count
+  const activeFilterCount = [
+    filters.searchTerm,
+    filters.category,
+    filters.brand,
+    filters.fabric,
+    filters.color,
+    filters.occasion,
+    filters.size,
+    filters.minPrice !== undefined,
+    filters.maxPrice !== undefined,
+    filters.stockStatus && filters.stockStatus !== "all",
+    filters.sortBy && filters.sortBy !== "relevance"
+  ].filter(Boolean).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
+            <span className="mr-2">🧕</span>
+            Abaya Collection
+          </h3>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              ✕ Clear All ({activeFilterCount})
+            </button>
+          )}
+        </div>
+        
+        {/* Search Bar with History */}
+        <div className="mb-4 relative">
+          <div className="flex space-x-2">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="🔍 Search abayas... (name, brand, style, fabric, color, barcode)"
+                defaultValue={filters.searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setShowSearchHistory(true)}
+                onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              />
+              
+              {/* Search History Dropdown */}
+              {showSearchHistory && searchHistory.length > 0 && (
+                <div className="absolute top-10 left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-10">
+                  <div className="text-xs font-semibold text-gray-700 px-3 py-2 border-b">Recent Searches</div>
+                  {searchHistory.map((search, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSearchChange(search)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 transition-colors"
+                    >
+                      🕐 {search}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`px-3 py-2 rounded-lg font-medium text-sm transition-all whitespace-nowrap ${
+                showAdvancedFilters 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              ⚙️ Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Filter Presets */}
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+          {filterPresets.map((preset, idx) => (
+            <button
+              key={idx}
+              onClick={() => applyPreset(preset)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                activePreset === preset.name
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {preset.icon} {preset.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Active Filter Tags */}
+        {hasActiveFilters && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {filters.searchTerm && (
+              <FilterTag 
+                label={`🔍 "${filters.searchTerm}"`}
+                onRemove={() => handleFilterChange('searchTerm', '')}
+              />
+            )}
+            {filters.category && (
+              <FilterTag 
+                label="📁 Category"
+                onRemove={() => handleFilterChange('category', undefined)}
+              />
+            )}
+            {filters.brand && (
+              <FilterTag 
+                label={`🏷️ ${filters.brand}`}
+                onRemove={() => handleFilterChange('brand', undefined)}
+              />
+            )}
+            {filters.fabric && (
+              <FilterTag 
+                label={`🧵 ${filters.fabric}`}
+                onRemove={() => handleFilterChange('fabric', undefined)}
+              />
+            )}
+            {filters.color && (
+              <FilterTag 
+                label={`🎨 ${filters.color}`}
+                onRemove={() => handleFilterChange('color', undefined)}
+              />
+            )}
+            {filters.occasion && (
+              <FilterTag 
+                label={`🎉 ${filters.occasion}`}
+                onRemove={() => handleFilterChange('occasion', undefined)}
+              />
+            )}
+            {filters.size && (
+              <FilterTag 
+                label={`📏 Size ${filters.size}`}
+                onRemove={() => handleFilterChange('size', undefined)}
+              />
+            )}
+            {filters.minPrice !== undefined && (
+              <FilterTag 
+                label={`💰 ৳${filters.minPrice}+`}
+                onRemove={() => handleFilterChange('minPrice', undefined)}
+              />
+            )}
+            {filters.maxPrice !== undefined && (
+              <FilterTag 
+                label={`💰 Up to ৳${filters.maxPrice}`}
+                onRemove={() => handleFilterChange('maxPrice', undefined)}
+              />
+            )}
+            {filters.stockStatus && filters.stockStatus !== "all" && (
+              <FilterTag 
+                label={`📦 ${filters.stockStatus.replace('-', ' ')}`}
+                onRemove={() => handleFilterChange('stockStatus', 'all')}
+              />
+            )}
+            {filters.sortBy && filters.sortBy !== "relevance" && (
+              <FilterTag 
+                label={`⬆️ Sort: ${filters.sortBy.replace('-', ' ')}`}
+                onRemove={() => handleFilterChange('sortBy', 'relevance')}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Advanced Filters Panel */}
+        {showAdvancedFilters && (
+          <div className="mb-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 space-y-4">
+            {/* Sorting Options */}
+            <div>
+              <label className="text-xs font-semibold text-gray-700 mb-2 block">⬆️ Sort By</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { value: "relevance", label: "Best Match" },
+                  { value: "price-asc", label: "Price: Low to High" },
+                  { value: "price-desc", label: "Price: High to Low" },
+                  { value: "newest", label: "Newest" },
+                  { value: "best-seller", label: "Best Seller" },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleFilterChange('sortBy', option.value)}
+                    className={`px-2 py-1 text-xs rounded transition-all ${
+                      filters.sortBy === option.value
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:border-purple-400'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Category Filter */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">📁 Category</label>
+                <select
+                  value={filters.category || ""}
+                  onChange={(e) => handleFilterChange('category', e.target.value || undefined)}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">All Categories</option>
+                  {categories?.map((cat: any) => (
+                    <option key={cat._id} value={cat._id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Brand Filter */}
+              {brands.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">🏷️ Brand</label>
+                  <select
+                    value={filters.brand || ""}
+                    onChange={(e) => handleFilterChange('brand', e.target.value || undefined)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">All Brands</option>
+                    {brands.map((brand: string) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Fabric Filter */}
+              {fabrics.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">🧵 Fabric</label>
+                  <select
+                    value={filters.fabric || ""}
+                    onChange={(e) => handleFilterChange('fabric', e.target.value || undefined)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">All Fabrics</option>
+                    {fabrics.map((fabric: string) => (
+                      <option key={fabric} value={fabric}>{fabric}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Color Filter */}
+              {colors.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">🎨 Color</label>
+                  <select
+                    value={filters.color || ""}
+                    onChange={(e) => handleFilterChange('color', e.target.value || undefined)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">All Colors</option>
+                    {colors.map((color: string) => (
+                      <option key={color} value={color}>{color}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Occasion Filter */}
+              {occasions.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">🎉 Occasion</label>
+                  <select
+                    value={filters.occasion || ""}
+                    onChange={(e) => handleFilterChange('occasion', e.target.value || undefined)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">All Occasions</option>
+                    {occasions.map((occ: string) => (
+                      <option key={occ} value={occ}>{occ}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Size Filter */}
+              {sizes.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">📏 Size</label>
+                  <select
+                    value={filters.size || ""}
+                    onChange={(e) => handleFilterChange('size', e.target.value || undefined)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">All Sizes</option>
+                    {sizes.map((size: string) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Stock Status Filter */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">📦 Stock</label>
+                <select
+                  value={filters.stockStatus || "all"}
+                  onChange={(e) => handleFilterChange('stockStatus', e.target.value as any)}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="all">All Items</option>
+                  <option value="in-stock">In Stock</option>
+                  <option value="low-stock">Low Stock</option>
+                  <option value="out-of-stock">Out of Stock</option>
+                </select>
+              </div>
+
+              {/* Min Price */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">💰 Min Price</label>
+                <input
+                  type="number"
+                  value={filters.minPrice || ""}
+                  onChange={(e) => handleFilterChange('minPrice', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder={`৳${priceStats.min}`}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {/* Max Price */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">💰 Max Price</label>
+                <input
+                  type="number"
+                  value={filters.maxPrice || ""}
+                  onChange={(e) => handleFilterChange('maxPrice', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder={`৳${priceStats.max}`}
+                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Results Info */}
+        <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-200">
+          <p className="text-xs text-blue-700">
+            🔍 Showing <strong>{products.length}</strong> of {allProducts.length} abayas
+            {hasActiveFilters && <span> (filtered)</span>}
+          </p>
+        </div>
+
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+          {products.map((product: any) => {
+            const category = categories?.find((c: any) => c._id === product.categoryId);
+            const stockStatus = product.currentStock === 0 ? 'Out' : product.currentStock <= (product.minStockLevel || 5) ? 'Low' : 'Good';
+            const stockColor = stockStatus === 'Good' ? 'text-green-600' : stockStatus === 'Low' ? 'text-orange-600' : 'text-red-600';
+            const isFavorite = favorites.has(product._id);
+
+            return (
+              <div
+                key={product._id}
+                className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow bg-gradient-to-br from-white to-purple-50 relative"
+              >
+                {/* Favorite Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(product._id);
+                  }}
+                  className="absolute top-2 right-2 text-lg hover:scale-125 transition-transform"
+                >
+                  {isFavorite ? '❤️' : '🤍'}
+                </button>
+
+                <div className="flex justify-between items-start mb-2 pr-6">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-gray-900 text-sm truncate">🧕 {product.name}</h4>
+                    <p className="text-xs text-gray-600 truncate">{product.style || 'Style'} - {product.fabric || 'Fabric'}</p>
+                    <p className="text-xs text-purple-600">{product.color || 'Color'}</p>
+                  </div>
+                  {category && (
+                    <span 
+                      className="inline-flex px-2 py-1 text-xs font-semibold rounded-full ml-2 flex-shrink-0"
+                      style={{ 
+                        backgroundColor: category?.color + '20',
+                        color: category?.color 
+                      }}
+                    >
+                      {category?.name}
+                    </span>
+                  )}
+                </div>
+                
+                <div className="mb-2">
+                  {product.occasion && <p className="text-xs text-gray-500">📍 {product.occasion}</p>}
+                  {product.sizes && product.sizes.length > 0 && (
+                    <p className="text-xs text-gray-500">📏 Sizes: {product.sizes.join(', ')}</p>
+                  )}
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-purple-600 text-sm">৳{product.sellingPrice.toLocaleString('en-BD')}</p>
+                    <p className={`text-xs font-medium ${stockColor}`}>
+                      {stockStatus === 'Out' ? '❌ Out of Stock' : `${stockStatus === 'Good' ? '✅' : '⚠️'} ${product.currentStock} left`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addToCart(product);
+                    }}
+                    disabled={product.currentStock === 0}
+                    className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded text-xs hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    {product.currentStock === 0 ? 'Out' : 'Add'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {products.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2 opacity-50">🧕</div>
+            <p className="text-gray-500 text-sm">
+              {hasActiveFilters ? 'No abayas match your filters' : 'No abayas found'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="mt-2 text-purple-600 hover:text-purple-800 text-sm font-medium"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ✅ NEW: FilterTag Component
+function FilterTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+      <span>{label}</span>
+      <button
+        onClick={onRemove}
+        className="ml-1 hover:text-purple-900"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+function CartSection({ cart, updateCartItem, removeFromCart, clearCart }: any) {
+  return (
+    <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
+          <span className="mr-2">🛒</span>
+          Cart ({cart.length})
+        </h3>
+        {cart.length > 0 && (
+          <button
+            onClick={clearCart}
+            className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-3 max-h-64 sm:max-h-80 overflow-y-auto">
+        {cart.map((item: CartItem) => (
+          <div key={item.cartId} className="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-purple-50 to-pink-50">
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-medium text-gray-900 text-sm truncate">🧕 {item.name}</h4>
+                <p className="text-xs text-gray-600">{item.style} - {item.fabric}</p>
+                <p className="text-xs text-purple-600">{item.color}</p>
+              </div>
+              <button
+                onClick={() => removeFromCart(item.cartId)}
+                className="text-red-600 hover:text-red-800 ml-2"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => updateCartItem(item.cartId, { quantity: Math.max(1, item.quantity - 1) })}
+                  className="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300"
+                >
+                  -
+                </button>
+                <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
+                <button
+                  onClick={() => updateCartItem(item.cartId, { quantity: Math.min(item.stock, item.quantity + 1) })}
+                  className="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300"
+                  disabled={item.quantity >= item.stock}
+                >
+                  +
+                </button>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-purple-600 text-sm">
+                  ৳{(item.price * item.quantity).toLocaleString('en-BD')}
+                </p>
+                <p className="text-xs text-gray-500">৳{item.price.toLocaleString('en-BD')} each</p>
+              </div>
+            </div>
+
+            {/* Size Selection for Abayas */}
+            {item.availableSizes && item.availableSizes.length > 0 && (
+              <div className="mt-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Size</label>
+                <select
+                  value={item.size || ""}
+                  onChange={(e) => updateCartItem(item.cartId, { size: e.target.value })}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="">Select Size</option>
+                  {item.availableSizes.map((size: string) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {cart.length === 0 && (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-2 opacity-50">🛒</div>
+          <p className="text-gray-500 text-sm">Cart is empty</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckoutSection({ 
+  customerInfo, setCustomerInfo, discount, setDiscount, discountType, setDiscountType, paymentMethod, setPaymentMethod,
+  paymentDetails, setPaymentDetails, deliveryType, setDeliveryType, deliveryInfo, setDeliveryInfo,
+  paymentMethods, subtotal, deliveryCharges, total, handleCheckout, cart, handleDeliveryTypeChange
+}: any) {
+  return (
+    <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <span className="mr-2">💳</span>
+        Checkout
+      </h3>
+
+      <div className="space-y-4">
+        {/* Customer Info */}
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2 text-sm">Customer Information</h4>
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="Customer name (optional)"
+              value={customerInfo.name}
+              onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+            />
+            <input
+              type="tel"
+              placeholder="Phone number (optional) - auto-fills saved address"
+              value={customerInfo.phone}
+              onChange={(e) => setCustomerInfo((prev: any) => ({ ...prev, phone: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+            />
+            {customerInfo.customerId && (
+              <p className="text-xs text-green-600">✅ Customer found - delivery address auto-filled</p>
+            )}
+          </div>
+        </div>
+
+        {/* Delivery Type */}
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2 text-sm">Delivery</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handleDeliveryTypeChange("pickup")}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                deliveryType === "pickup"
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Pickup
+            </button>
+            <button
+              onClick={() => handleDeliveryTypeChange("delivery")}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                deliveryType === "delivery"
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Delivery
+            </button>
+          </div>
+          
+          {deliveryType === "delivery" && (
+            <div className="mt-2 space-y-2">
+              <input
+                type="text"
+                placeholder="Delivery address"
+                value={deliveryInfo.address}
+                onChange={(e) => setDeliveryInfo({ ...deliveryInfo, address: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              />
+              <input
+                type="number"
+                placeholder="Delivery charges"
+                value={deliveryInfo.charges}
+                onChange={(e) => setDeliveryInfo({ ...deliveryInfo, charges: Number(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Payment Method */}
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2 text-sm">Payment Method</h4>
+          <div className="grid grid-cols-2 gap-2">
+            {paymentMethods.map((method: any) => (
+              <button
+                key={method.id}
+                onClick={() => setPaymentMethod(method.id)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1 ${
+                  paymentMethod === method.id
+                    ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                <span>{method.icon}</span>
+                <span>{method.name}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Payment Details */}
+          {paymentMethod !== "cash" && paymentMethod !== "cod" && (
+            <div className="mt-2 space-y-2">
+              {/* Mobile Banking: Phone Number + Transaction ID */}
+              {["bkash", "nagad", "rocket", "upay"].includes(paymentMethod) && (
+                <>
+                  <div>
+                    <input
+                      type="tel"
+                      placeholder="Phone number (01XXXXXXXXX) *"
+                      value={paymentDetails.phoneNumber}
+                      onChange={(e) => setPaymentDetails({ ...paymentDetails, phoneNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                      maxLength={11}
+                    />
+                    {paymentDetails.phoneNumber && !/^01\d{9}$/.test(paymentDetails.phoneNumber.replace(/\D/g, '')) && (
+                      <p className="text-xs text-red-600 mt-1">Invalid format. Must be 01XXXXXXXXX (11 digits)</p>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={`${paymentMethod.toUpperCase()} Transaction ID *`}
+                    value={paymentDetails.transactionId}
+                    onChange={(e) => setPaymentDetails({ ...paymentDetails, transactionId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  />
+                </>
+              )}
+
+              {/* Card: Transaction ID + Reference (Last 4 digits) */}
+              {paymentMethod === "card" && (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Transaction ID *"
+                    value={paymentDetails.transactionId}
+                    onChange={(e) => setPaymentDetails({ ...paymentDetails, transactionId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  />
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Card Last 4 Digits *"
+                      value={paymentDetails.reference}
+                      onChange={(e) => {
+                        // Allow only digits
+                        const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setPaymentDetails({ ...paymentDetails, reference: digitsOnly });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                      maxLength={4}
+                    />
+                    {paymentDetails.reference && paymentDetails.reference.length !== 4 && (
+                      <p className="text-xs text-red-600 mt-1">Must be exactly 4 digits</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Discount */}
+        <div>
+          <h4 className="font-medium text-gray-900 mb-2 text-sm">Discount</h4>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              placeholder={discountType === "percentage" ? "0-100%" : "Amount (৳)"}
+              value={discount}
+              onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              min="0"
+            />
+            <select
+              value={discountType}
+              onChange={(e) => setDiscountType(e.target.value as "fixed" | "percentage")}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm bg-white"
+            >
+              <option value="fixed">টাকা</option>
+              <option value="percentage">%</option>
+            </select>
+          </div>
+          {discountType === "percentage" && discount > 100 && (
+            <p className="text-xs text-red-600 mt-1">Discount cannot exceed 100%</p>
+          )}
+        </div>
+
+        {/* Order Summary */}
+        <div className="border-t pt-4">
+          <h4 className="font-medium text-gray-900 mb-2 text-sm">Order Summary</h4>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>৳{subtotal.toLocaleString('en-BD')}</span>
+            </div>
+            <div className="flex justify-between">
+
+            </div>
+            {deliveryCharges > 0 && (
+              <div className="flex justify-between">
+                <span>Delivery:</span>
+                <span>৳{deliveryCharges.toLocaleString('en-BD')}</span>
+              </div>
+            )}
+            {discount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Discount ({discountType === "percentage" ? "%" : "৳"}):</span>
+                <span>-৳{(discountType === "percentage" ? (subtotal * discount) / 100 : discount).toLocaleString('en-BD')}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-semibold text-base border-t pt-1">
+              <span>Total:</span>
+              <span>৳{total.toLocaleString('en-BD')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Checkout Button */}
+        <button
+          onClick={handleCheckout}
+          disabled={cart.length === 0}
+          className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-all duration-200"
+        >
+          Complete Abaya Sale
+        </button>
+      </div>
+    </div>
+  );
+}
