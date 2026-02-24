@@ -205,24 +205,31 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
           font-size: ${printSettings.fontSize === 'small' ? '9px' : printSettings.fontSize === 'large' ? '12px' : '10px'};
         }
         .invoice-items { 
-          margin-bottom: 8px; 
+          margin-bottom: 8px;
+          min-height: 40px;
         }
         .item-row {
-          margin-bottom: 1px;
+          margin-bottom: 4px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #ccc;
           font-size: ${printSettings.fontSize === 'small' ? '9px' : printSettings.fontSize === 'large' ? '12px' : '10px'};
           page-break-inside: avoid;
         }
         .invoice-total { 
-          margin-bottom: 8px; 
+          margin-bottom: 6px;
+          padding: 4px;
           border-top: 2px solid #000;
-          padding-top: 5px;
+          border-bottom: 2px solid #000;
+          padding-top: 4px;
+          padding-bottom: 4px;
         }
         .invoice-footer { 
           text-align: center; 
-          margin-top: 8px; 
-          border-top: 1px dashed #000;
-          padding-top: 5px;
+          margin-top: 6px;
+          padding-top: 4px;
+          border-top: 1px solid #000;
           font-size: ${printSettings.fontSize === 'small' ? '8px' : printSettings.fontSize === 'large' ? '11px' : '9px'};
+          line-height: 1.3;
         }
         .divider { 
           border-top: 1px dashed #000; 
@@ -277,16 +284,21 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
       @media screen {
         body {
           font-family: 'Courier New', monospace;
-          max-width: ${printSettings.paperSize === 'A4' ? '210mm' : printSettings.paperSize === '80mm' ? '80mm' : '58mm'};
           margin: 0 auto;
-          padding: 10px;
-          background: white;
+          padding: 15px;
+          background: #f0f0f0;
         }
         .invoice-container {
-          border: 1px solid #ddd;
-          padding: 10px;
+          border: 2px solid #000;
+          padding: 12px;
           background: white;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          border-radius: 4px;
+        }
+        .invoice-header {
+          border-bottom: 2px solid #000;
+          padding-bottom: 8px;
+          margin-bottom: 6px;
         }
       }
     `;
@@ -483,17 +495,17 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
             {/* Invoice Content */}
             <div 
               ref={invoiceRef}
-              className={`font-mono text-sm border-2 border-gray-300 p-4 bg-white shadow-lg ${
-                printSettings.paperSize === '58mm' ? 'max-w-[58mm]' : 
-                printSettings.paperSize === '80mm' ? 'max-w-[80mm]' : 'max-w-full'
+              className={`font-mono text-sm border-2 border-gray-300 p-5 bg-white shadow-lg rounded-lg overflow-hidden ${
+                printSettings.paperSize === '58mm' ? 'w-[240px]' : 
+                printSettings.paperSize === '80mm' ? 'w-[350px]' : 'w-full max-w-4xl'
               } mx-auto`}
               style={{ 
-                fontSize: printSettings.fontSize === 'small' ? '11px' : printSettings.fontSize === 'large' ? '15px' : '13px',
-                width: printSettings.paperSize === '58mm' ? '220px' : printSettings.paperSize === '80mm' ? '300px' : '100%'
+                fontSize: printSettings.fontSize === 'small' ? '12px' : printSettings.fontSize === 'large' ? '14px' : '13px',
+                lineHeight: '1.5'
               }}
             >
               {/* Header */}
-              <div className="invoice-header text-center mb-4">
+              <div className="invoice-header text-center mb-3 pb-2 border-b-2 border-gray-800">
                 {printSettings.includeLogo && shopSettings.logo && (
                   <div className="text-center mx-auto mb-3">
                     <img 
@@ -507,8 +519,8 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
                     />
                   </div>
                 )}
-                <div className="shop-name text-lg font-bold uppercase">{shopSettings.name}</div>
-                <div className="shop-details">
+                <div className="shop-name text-lg font-bold uppercase mb-2">{shopSettings.name}</div>
+                <div className="shop-details text-xs space-y-0.5">
                   <p className="text-xs">{shopSettings.address}</p>
                   <p className="text-xs">📞 {shopSettings.phone1}</p>
                   {shopSettings.phone2 && <p className="text-xs">📞 {shopSettings.phone2}</p>}
@@ -522,7 +534,7 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
               <div className="double-divider"></div>
 
               {/* Invoice Details */}
-              <div className="invoice-details mb-4">
+              <div className="invoice-details mb-3 pb-2 space-y-1">
                 <div className="flex-between highlight">
                   <span className="font-bold">RECEIPT: {sale.saleNumber}</span>
                 </div>
@@ -541,52 +553,50 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
                 )}
               </div>
 
-              <div className="solid-divider"></div>
+              <div className="solid-divider my-2"></div>
 
               {/* Items */}
-              <div className="invoice-items mb-4">
-                <div className="font-bold mb-2 text-center uppercase">Items Purchased</div>
+              <div className="invoice-items mb-3 pb-2">
+                <div className="font-bold mb-2 pb-1 text-center uppercase border-b border-gray-600 text-sm">📦 Items Purchased</div>
                 {sale.items.map((item, index) => (
-                  <div key={index} className="item-row mb-1">
+                  <div key={index} className="item-row mb-2 pb-1 border-b border-gray-300">
                     <div className="font-bold">{item.productName}</div>
-                    <div className="flex-between">
+                    <div className="flex justify-between text-xs">
                       <span>{item.quantity} × ৳{item.unitPrice.toLocaleString('en-BD')}</span>
                       <span className="font-bold">৳{item.totalPrice.toLocaleString('en-BD')}</span>
                     </div>
-                    {item.size && <div className="text-xs">📏 Size: {item.size}</div>}
-                    <div className="divider"></div>
+                    {item.size && <div className="text-xs text-gray-600">Size: {item.size}</div>}
                   </div>
                 ))}
               </div>
 
               {/* Totals */}
-              <div className="invoice-total mb-4">
-                <div className="flex-between">
+              <div className="invoice-total mb-3 pb-2 space-y-1">
+                <div className="flex justify-between text-xs">
                   <span>Subtotal:</span>
                   <span>৳{sale.subtotal.toLocaleString('en-BD')}</span>
                 </div>
                 {sale.discount > 0 && (
-                  <div className="flex-between">
+                  <div className="flex justify-between text-xs text-red-600">
                     <span>Discount:</span>
-                    <span className="text-red-600">-৳{sale.discount.toLocaleString('en-BD')}</span>
+                    <span>-৳{sale.discount.toLocaleString('en-BD')}</span>
                   </div>
                 )}
-                <div className="double-divider"></div>
-                <div className="flex-between font-bold text-lg total-highlight">
+                <div className="border-t-2 border-b-2 border-gray-800 my-1 py-1 flex justify-between font-bold text-sm bg-gray-100">
                   <span>TOTAL:</span>
                   <span>৳{sale.total.toLocaleString('en-BD')}</span>
                 </div>
-                <div className="flex-between">
+                <div className="flex justify-between text-xs pt-1">
                   <span>Paid:</span>
                   <span>৳{sale.paidAmount.toLocaleString('en-BD')}</span>
                 </div>
                 {sale.dueAmount > 0 ? (
-                  <div className="flex-between font-bold text-red-600">
+                  <div className="flex justify-between font-bold text-xs text-red-600 bg-red-50 p-1 rounded">
                     <span>Due:</span>
                     <span>৳{sale.dueAmount.toLocaleString('en-BD')}</span>
                   </div>
                 ) : sale.paidAmount > sale.total && (
-                  <div className="flex-between font-bold text-green-600">
+                  <div className="flex justify-between font-bold text-xs text-green-600 bg-green-50 p-1 rounded">
                     <span>Change:</span>
                     <span>৳{(sale.paidAmount - sale.total).toLocaleString('en-BD')}</span>
                   </div>
@@ -594,31 +604,28 @@ export function InvoiceModal({ sale, onClose }: InvoiceModalProps) {
               </div>
 
               {printSettings.includeBarcode && barcodeDataUrl && (
-                <div className="barcode text-center mb-4">
-                  <div className="text-xs font-bold mb-2">🌐 Visit Us Online 🌐</div>
-                  <img src={barcodeDataUrl} alt="Barcode" style={{ maxWidth: '100%', height: 'auto' }} />
-                  <div className="text-xs mt-2 font-bold">www.dubaiborkahouse.com</div>
+                <div className="barcode text-center mb-2 py-2 border-t border-b border-gray-300">
+                  <div className="text-xs font-bold mb-1">🌐 Visit Online 🌐</div>
+                  <img src={barcodeDataUrl} alt="Barcode" style={{ maxWidth: '100%', height: 'auto', maxHeight: '50px' }} />
+                  <div className="text-xs mt-1">{shopSettings.website}</div>
                 </div>
               )}
 
               {printSettings.includeQR && qrCodeDataUrl && (
-                <div className="qr-code text-center my-6">
-                  <p className="text-xs font-bold mb-2">👉 Follow Us 👈</p>
-                  <img src={qrCodeDataUrl} alt="QR Code" style={{ width: '100px', height: '100px', margin: '0 auto' }} />
-                  <div className="text-xs mt-2 font-bold">Facebook</div>
+                <div className="qr-code text-center my-2 py-2 border-t border-b border-gray-300">
+                  <p className="text-xs font-bold mb-1">Scan To Follow</p>
+                  <img src={qrCodeDataUrl} alt="QR Code" style={{ width: '80px', height: '80px', margin: '0 auto' }} />
                 </div>
               )}
 
-              <div className="divider"></div>
-
               {/* Footer */}
-              <div className="invoice-footer text-center">
-                <p className="font-bold mb-2">🌟 TERMS & CONDITIONS 🌟</p>
-                <p className="text-xs mb-1">• Replace within 3 days with receipt</p>
-                <div className="divider"></div>
-                <p className="font-bold text-lg mb-2">Thank You for Shopping!</p>
-                <p className="font-bold mb-2">جزاك الله خيرا</p>
-                <p className="text-xs">{shopSettings.website}</p>
+              <div className="invoice-footer text-center text-xs border-t pt-2 mt-2 space-y-1">
+                <p className="font-bold">✅ TERMS & CONDITIONS</p>
+                <p>• Replace within 3 days with receipt</p>
+                <p>• Quality guaranteed</p>
+                <div className="border-t my-1 pt-1"></div>
+                <p className="font-bold text-sm">Thank You! 🙏</p>
+                <p className="font-bold text-xs">جزاك الله خيرا</p>
               </div>
             </div>
 
