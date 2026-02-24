@@ -5,6 +5,7 @@ import { useCustomNotificationSounds } from "../hooks/useCustomNotificationSound
 import { useNotificationSystem, NotificationPresets } from "../hooks/useNotificationSystem";
 import { NotificationAlertsPanel, NotificationIcon, DashboardAlertsSummary } from "./NotificationAlertsPanel";
 import { useState, useEffect, useRef } from "react";
+import FabricAnalyzer from "./FabricAnalyzer";
 
 // Skeleton component for loading cards
 const MetricCardSkeleton = () => (
@@ -36,6 +37,7 @@ const SalesCardSkeleton = () => (
 
 export function Dashboard() {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [showFabricAnalyzer, setShowFabricAnalyzer] = useState(false); // ✅ NEW: Fabric Analyzer modal state
   const { notify } = useNotificationSystem();
   // Load custom notification sounds from settings
   const { isLoaded: soundsLoaded } = useCustomNotificationSounds();
@@ -539,6 +541,54 @@ export function Dashboard() {
 
           {/* Dashboard Alerts Summary */}
           <DashboardAlertsSummary />
+
+          {/* ✅ NEW: Fabric Analyzer Tools Section */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 shadow-sm p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-3xl">🧵</span>
+                  <h3 className="text-lg font-bold text-slate-900">Fabric Analyzer</h3>
+                </div>
+                <p className="text-sm text-slate-600">Analyze fabric properties from uploaded images instantly</p>
+              </div>
+              <button
+                onClick={() => setShowFabricAnalyzer(true)}
+                className="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg hover:from-amber-700 hover:to-orange-700 font-semibold transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2 whitespace-nowrap"
+                title="Open Fabric Analyzer Tool"
+              >
+                <span>📸</span>
+                <span>Open Analyzer</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="bg-white rounded-lg p-3 border border-amber-100">
+                <p className="text-xs font-semibold text-amber-600 mb-1">📋 What it detects:</p>
+                <ul className="text-xs text-slate-600 space-y-1">
+                  <li>✓ Fabric type (Crepe, Chiffon, etc.)</li>
+                  <li>✓ Color & embellishments</li>
+                  <li>✓ Craftsmanship details</li>
+                </ul>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-amber-100">
+                <p className="text-xs font-semibold text-amber-600 mb-1">🎯 How to use:</p>
+                <ul className="text-xs text-slate-600 space-y-1">
+                  <li>1. Click "Open Analyzer"</li>
+                  <li>2. Upload fabric image</li>
+                  <li>3. View analysis results</li>
+                </ul>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-amber-100">
+                <p className="text-xs font-semibold text-amber-600 mb-1">💡 Use case:</p>
+                <ul className="text-xs text-slate-600 space-y-1">
+                  <li>✓ Add new products</li>
+                  <li>✓ Verify product details</li>
+                  <li>✓ Quality control</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 🔧 DEVELOPMENT: Diagnostic Panel */}
@@ -566,6 +616,33 @@ export function Dashboard() {
         isOpen={notificationPanelOpen} 
         onClose={() => setNotificationPanelOpen(false)}
       />
+
+      {/* ✅ NEW: Fabric Analyzer Modal */}
+      {showFabricAnalyzer && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-orange-600 text-white p-6 flex items-center justify-between border-b border-amber-700">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🧵</span>
+                <h2 className="text-2xl font-bold">Fabric Analyzer</h2>
+              </div>
+              <button
+                onClick={() => setShowFabricAnalyzer(false)}
+                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors text-2xl"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <FabricAnalyzer />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
