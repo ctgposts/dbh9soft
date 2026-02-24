@@ -136,6 +136,11 @@ const parseProductNameForAutoFill = (
     return {};
   }
 
+  // Defensive: ensure arrays are defined
+  const safeCategories = categories ?? [];
+  const safeFabricOptions = fabricOptions ?? [];
+  const safeEmbellishmentOptions = embellishmentOptions ?? [];
+
   const parts = productName.trim().split(/\s+/); // Split by whitespace
   if (parts.length < 2) {
     return {}; // Need at least category + fabric
@@ -145,27 +150,31 @@ const parseProductNameForAutoFill = (
 
   // First part = Category (case-insensitive match)
   const firstPart = parts[0];
-  const matchedCategory = categories.find(
-    (cat: any) => cat?.name?.toLowerCase() === firstPart.toLowerCase()
-  );
-  if (matchedCategory) {
-    result.categoryId = matchedCategory._id;
+  if (safeCategories.length > 0) {
+    const matchedCategory = safeCategories.find(
+      (cat: any) => cat?.name?.toLowerCase() === firstPart.toLowerCase()
+    );
+    if (matchedCategory) {
+      result.categoryId = matchedCategory._id;
+    }
   }
 
   // Second part = Fabric (case-insensitive match)
   const secondPart = parts[1];
-  const matchedFabric = fabricOptions.find(
-    (fab: string) => fab?.toLowerCase() === secondPart.toLowerCase()
-  );
-  if (matchedFabric) {
-    result.fabric = matchedFabric;
+  if (safeFabricOptions.length > 0) {
+    const matchedFabric = safeFabricOptions.find(
+      (fab: string) => fab && fab.toLowerCase() === secondPart.toLowerCase()
+    );
+    if (matchedFabric) {
+      result.fabric = matchedFabric;
+    }
   }
 
   // Remaining parts = Embellishment (case-insensitive match)
-  if (parts.length > 2) {
+  if (parts.length > 2 && safeEmbellishmentOptions.length > 0) {
     const remainingParts = parts.slice(2).join(" ");
-    const matchedEmbellishment = embellishmentOptions.find(
-      (emb: string) => emb?.toLowerCase() === remainingParts.toLowerCase()
+    const matchedEmbellishment = safeEmbellishmentOptions.find(
+      (emb: string) => emb && emb.toLowerCase() === remainingParts.toLowerCase()
     );
     if (matchedEmbellishment) {
       result.embellishments = matchedEmbellishment;
@@ -1826,11 +1835,29 @@ export default function Inventory() {
                           // ✅ Auto-parse product name for category, fabric, embellishment
                           const parsed = parseProductNameForAutoFill(nameValue, categories, fabricOptions, embellishmentOptions);
                           
+                          // DEBUG: Log parsing results
+                          console.log('🔍 Product Name Parse Debug:', {
+                            input: nameValue,
+                            categoriesCount: categories?.length || 0,
+                            fabricOptionsCount: fabricOptions?.length || 0,
+                            embellishmentOptionsCount: embellishmentOptions?.length || 0,
+                            parsed: parsed,
+                          });
+                          
                           // Build the update object
                           let updatedProduct = { ...newProduct, name: nameValue };
-                          if (parsed.categoryId) updatedProduct.categoryId = parsed.categoryId;
-                          if (parsed.fabric) updatedProduct.fabric = parsed.fabric;
-                          if (parsed.embellishments) updatedProduct.embellishments = parsed.embellishments;
+                          if (parsed.categoryId) {
+                            updatedProduct.categoryId = parsed.categoryId;
+                            console.log('✅ Category matched:', parsed.categoryId);
+                          }
+                          if (parsed.fabric) {
+                            updatedProduct.fabric = parsed.fabric;
+                            console.log('✅ Fabric matched:', parsed.fabric);
+                          }
+                          if (parsed.embellishments) {
+                            updatedProduct.embellishments = parsed.embellishments;
+                            console.log('✅ Embellishment matched:', parsed.embellishments);
+                          }
                           
                           setNewProduct(updatedProduct);
                         }}
