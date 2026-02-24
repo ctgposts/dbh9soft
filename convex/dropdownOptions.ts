@@ -5,8 +5,11 @@ import { v } from "convex/values";
 export const getFabricOptions = query({
   args: {},
   handler: async (ctx) => {
-    const options = await ctx.db.query("fabricOptions").order("asc").collect();
-    return options.map(opt => opt.name).sort();
+    const options = await ctx.db.query("fabricOptions").collect();
+    return options
+      .map((opt: any) => opt?.name)
+      .filter((name: any): name is string => typeof name === 'string' && name.length > 0)
+      .sort();
   },
 });
 
@@ -14,8 +17,11 @@ export const getFabricOptions = query({
 export const getEmbellishmentOptions = query({
   args: {},
   handler: async (ctx) => {
-    const options = await ctx.db.query("embellishmentOptions").order("asc").collect();
-    return options.map(opt => opt.name).sort();
+    const options = await ctx.db.query("embellishmentOptions").collect();
+    return options
+      .map((opt: any) => opt?.name)
+      .filter((name: any): name is string => typeof name === 'string' && name.length > 0)
+      .sort();
   },
 });
 

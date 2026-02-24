@@ -32,13 +32,18 @@ export function EditableCombobox({
   );
   const addCategory = useMutation(api.dropdownOptions.addCategory);
 
+  // Safely normalize options - filter out undefined/null values and non-strings
+  const safeOptions = (options || []).filter((opt): opt is string => {
+    return opt != null && typeof opt === "string" && opt.length > 0;
+  });
+
   // Filter suggestions based on input
-  const filteredOptions = options.filter((opt) =>
+  const filteredOptions = safeOptions.filter((opt) =>
     opt.toLowerCase().includes(inputValue.toLowerCase())
   );
 
   const isNewValue =
-    inputValue.trim() && !options.includes(inputValue.trim());
+    inputValue.trim() && !safeOptions.includes(inputValue.trim());
 
   useEffect(() => {
     // Close dropdown when clicking outside
@@ -67,7 +72,7 @@ export function EditableCombobox({
       return;
     }
 
-    if (options.includes(inputValue.trim())) {
+    if (safeOptions.includes(inputValue.trim())) {
       toast.info("This option already exists");
       handleSelect(inputValue.trim());
       return;
@@ -175,8 +180,8 @@ export function EditableCombobox({
             </div>
           ) : (
             <div className="py-2">
-              {options.length > 0 ? (
-                options.map((option) => (
+              {safeOptions.length > 0 ? (
+                safeOptions.map((option) => (
                   <button
                     key={option}
                     onClick={() => handleSelect(option)}
