@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
@@ -48,6 +48,9 @@ export default function POS() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");//✅ NEW: Barcode scanner input buffer
+  const [isBarcodeMode, setIsBarcodeMode] = useState(false); // ✅ NEW: Toggle barcode scanner mode
+  const barcodeTimeoutRef = useRef<NodeJS.Timeout>();// ✅ NEW: Timeout for barcode completion
   const [mobilePaymentDetails, setMobilePaymentDetails] = useState({
     phoneNumber: "",
     transactionId: "",
@@ -126,6 +129,91 @@ export default function POS() {
       }));
     }
   }, [selectedCustomer, customers]);
+
+  // ✅ NEW: Barcode Scanner - Listen for barcode input
+  useEffect(() => {
+    if (!isBarcodeMode) return;
+
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input field (except search)
+      const target = event.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' && target.id !== 'barcode-search';
+      if (isInputField && target.id !== 'quick-search') {
+        return;
+      }
+
+      // Enter key completes the barcode scan
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (barcodeInput.trim().length > 0) {
+          processBarcodeScan(barcodeInput.trim());
+        }
+        return;
+      }
+
+      // Add character to barcode buffer
+      if (event.key.length === 1 && /[\w-]/.test(event.key)) {
+        event.preventDefault();
+        const newBarcode = barcodeInput + event.key;
+        setBarcodeInput(newBarcode);
+
+        // Clear existing timeout
+        if (barcodeTimeoutRef.current) {
+          clearTimeout(barcodeTimeoutRef.current);
+        }
+
+        // Set new timeout - if no input for 100ms, assume scan is complete
+        barcodeTimeoutRef.current = setTimeout(() => {
+          if (newBarcode.trim().length > 2) {
+            processBarcodeScan(newBarcode.trim());
+          }
+        }, 100);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      if (barcodeTimeoutRef.current) {
+        clearTimeout(barcodeTimeoutRef.current);
+      }
+    };
+  }, [barcodeInput, isBarcodeMode, products, cart]);
+
+  // ✅ NEW: Process barcode scan and add product to cart
+  const processBarcodeScan = (barcode: string) => {
+    const trimmedBarcode = barcode.trim();
+    
+    // Find product by barcode
+    const scannedProduct = products.find(p => 
+      p.barcode.toLowerCase() === trimmedBarcode.toLowerCase()
+    );
+
+    if (!scannedProduct) {
+      toast.error(`❌ Barcode not found: ${trimmedBarcode}`);
+      setBarcodeInput("");
+      return;
+    }
+
+    if (!scannedProduct.isActive || scannedProduct.currentStock <= 0) {
+      toast.error(`❌ ${scannedProduct.name} is out of stock or unavailable`);
+      setBarcodeInput("");
+      return;
+    }
+
+    // Add to cart
+    if (scannedProduct.sizes.length > 1) {
+      // Show size selection modal for multi-size products
+      setSizeSelectionModal({ product: scannedProduct, isOpen: true });
+      setSelectedSize("");
+    } else {
+      // Directly add single-size products
+      addToCart(scannedProduct, scannedProduct.sizes[0]);
+    }
+
+    toast.success(`✅ ${scannedProduct.name} scanned and added!`);
+    setBarcodeInput("");
+  };
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -503,6 +591,22 @@ export default function POS() {
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <button
+            onClick={() => setIsBarcodeMode(!isBarcodeMode)}
+            className={`px-6 py-3 text-sm rounded-2xl font-semibold transition-all duration-300 flex items-center gap-2 ${ 
+              isBarcodeMode
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+            title={isBarcodeMode ? "Barcode Scanner Active" : "Click to activate barcode scanner"}
+          >
+            {isBarcodeMode ? '📱 SCANNER ON' : '📱 Scanner OFF'}
+            {isBarcodeMode && barcodeInput && (
+              <span className="text-xs bg-green-800 px-2 py-1 rounded">
+                {barcodeInput}
+              </span>
+            )}
+          </button>
+          <button
             onClick={clearCart}
             disabled={cart.length === 0}
             className="px-6 py-3 text-sm border border-gray-200 rounded-2xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-300"
@@ -853,14 +957,32 @@ export default function POS() {
             <div className="flex items-center space-x-2 mb-4">
               <span className="text-2xl">🔍</span>
               <h3 className="text-lg font-bold text-gray-900">Search Products</h3>
+              {isBarcodeMode && (
+                <span className="ml-auto px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">
+                  📱 SCANNING ACTIVE
+                </span>
+              )}
             </div>
             <input
               type="text"
               placeholder="Search by name, brand, or barcode..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              id="quick-search"
               className="input-field"
             />
+            {isBarcodeMode && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>✅ Barcode Scanner Active:</strong> Just scan a barcode or press Enter to add products
+                </p>
+                {barcodeInput && (
+                  <p className="text-xs text-green-700 mt-2">
+                    Current input: <code className="bg-green-100 px-2 py-1 rounded">{barcodeInput}</code>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Products Grid */}
