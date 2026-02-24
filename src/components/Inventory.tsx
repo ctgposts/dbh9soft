@@ -125,6 +125,56 @@ const generateProductName = (categoryId: string | undefined, fabric: string | un
   return parts.join(" ");
 };
 
+// ✅ NEW: Auto-parse product name and extract category, fabric, embellishment
+const parseProductNameForAutoFill = (
+  productName: string,
+  categories: any[],
+  fabricOptions: string[],
+  embellishmentOptions: string[]
+): { categoryId?: string; fabric?: string; embellishments?: string } => {
+  if (!productName || !productName.trim()) {
+    return {};
+  }
+
+  const parts = productName.trim().split(/\s+/); // Split by whitespace
+  if (parts.length < 2) {
+    return {}; // Need at least category + fabric
+  }
+
+  const result: { categoryId?: string; fabric?: string; embellishments?: string } = {};
+
+  // First part = Category (case-insensitive match)
+  const firstPart = parts[0];
+  const matchedCategory = categories.find(
+    (cat: any) => cat?.name?.toLowerCase() === firstPart.toLowerCase()
+  );
+  if (matchedCategory) {
+    result.categoryId = matchedCategory._id;
+  }
+
+  // Second part = Fabric (case-insensitive match)
+  const secondPart = parts[1];
+  const matchedFabric = fabricOptions.find(
+    (fab: string) => fab?.toLowerCase() === secondPart.toLowerCase()
+  );
+  if (matchedFabric) {
+    result.fabric = matchedFabric;
+  }
+
+  // Remaining parts = Embellishment (case-insensitive match)
+  if (parts.length > 2) {
+    const remainingParts = parts.slice(2).join(" ");
+    const matchedEmbellishment = embellishmentOptions.find(
+      (emb: string) => emb?.toLowerCase() === remainingParts.toLowerCase()
+    );
+    if (matchedEmbellishment) {
+      result.embellishments = matchedEmbellishment;
+    }
+  }
+
+  return result;
+};
+
 export default function Inventory() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -1770,10 +1820,24 @@ export default function Inventory() {
                       <input
                         type="text"
                         value={newProduct.name}
-                        onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                        onChange={(e) => {
+                          const nameValue = e.target.value;
+                          
+                          // ✅ Auto-parse product name for category, fabric, embellishment
+                          const parsed = parseProductNameForAutoFill(nameValue, categories, fabricOptions, embellishmentOptions);
+                          
+                          // Build the update object
+                          let updatedProduct = { ...newProduct, name: nameValue };
+                          if (parsed.categoryId) updatedProduct.categoryId = parsed.categoryId;
+                          if (parsed.fabric) updatedProduct.fabric = parsed.fabric;
+                          if (parsed.embellishments) updatedProduct.embellishments = parsed.embellishments;
+                          
+                          setNewProduct(updatedProduct);
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                        placeholder="e.g., Elegant Evening Abaya"
+                        placeholder="e.g., ABAYA Nida Stone Work"
                       />
+                      <small className="text-gray-500 mt-1 block">💡 Tip: Format as "Category Fabric Embellishment" for auto-fill</small>
                     </div>
 
                     <div>
